@@ -30,7 +30,7 @@ function ContextMiniCard({ item, isActive, onSelect }) {
   return (
     <button
       type="button"
-      className={`relative min-w-0 rounded-2xl border p-2.5 text-left shadow-[0_8px_18px_rgba(0,0,0,0.08)] backdrop-blur-[10px] transition ${
+      className={`relative min-w-0 ${isActive ? "col-span-2" : ""} rounded-2xl border p-2.5 text-left shadow-[0_8px_18px_rgba(0,0,0,0.08)] backdrop-blur-[10px] transition ${
         isActive
           ? "border-teal-300 bg-white/72 ring-2 ring-teal-200"
           : "border-white/70 bg-white/50 hover:bg-white/60"
@@ -436,8 +436,8 @@ export default function RightAgentDrawer({
   };
 
   return (
-    <div className="pointer-events-none absolute inset-y-0 right-0 z-[45] overflow-visible">
-      <div className="relative flex h-full w-[335px] transform-gpu sm:w-[355px] lg:w-[367px]">
+    <div className="pointer-events-none absolute bottom-0 right-0 top-[58px] z-[45] overflow-visible">
+      <div className="relative flex h-full w-[365px] transform-gpu sm:w-[385px] lg:w-[397px]">
         <div
           className="pointer-events-none absolute inset-y-0 left-0 z-[0] w-[96px]"
           aria-hidden
@@ -445,7 +445,7 @@ export default function RightAgentDrawer({
         />
         <motion.div
           ref={chatDropZoneRef}
-          className={`relative h-full w-[335px] overflow-hidden rounded-l-[15px] pointer-events-auto opacity-100 sm:w-[355px] lg:w-[367px] ${
+          className={`relative h-full w-[365px] overflow-hidden rounded-l-[15px] pointer-events-auto opacity-100 sm:w-[385px] lg:w-[397px] ${
             isChat && isChatDropActive ? "ring-4 ring-teal-300/40" : ""
           }`}
           aria-hidden={false}
@@ -493,8 +493,9 @@ export default function RightAgentDrawer({
                     type="button"
                     onClick={() => onToggleMode("tip")}
                     className={`relative rounded-full px-3 py-1.5 text-xs font-semibold transition ${
-                      isTip ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-white"
+                      isTip ? "text-white" : "text-slate-600 hover:bg-white"
                     }`}
+                    style={isTip ? { background: "linear-gradient(180deg, #3E5A8F 0%, #182338 100%)" } : undefined}
                   >
                     {copy.suggestionsTab}
                     {hasTipSignal ? (
@@ -538,7 +539,7 @@ export default function RightAgentDrawer({
                     />
 
                     {activeSuggestion ? (
-                      <div className={`rounded-xl border ${categoryColors.border} ${categoryColors.tint} px-2.5 py-2`}>
+                      <div className={`-mx-1 rounded-xl border ${categoryColors.border} ${categoryColors.tint} px-2.5 py-2`}>
                         <div className="flex flex-wrap items-center gap-1.5">
                           <div className={`text-[10px] font-bold uppercase tracking-wider ${categoryColors.text}`}>
                             {activeMeta.category}

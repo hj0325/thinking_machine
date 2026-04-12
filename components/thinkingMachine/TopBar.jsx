@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { normalizeReasoningStage } from "@/lib/thinkingMachine/nodeMeta";
 
-const TOPBAR_SIDE_SLOT_WIDTH = 372;
+const TOPBAR_SIDE_SLOT_WIDTH = 382;
 const TOPBAR_TEXT_STYLE = {
   fontFamily: '"Instrument Sans", sans-serif',
   lineHeight: "100%",
@@ -80,7 +80,7 @@ export default function TopBar({
         className="grid items-start"
         style={{ gridTemplateColumns: `${TOPBAR_SIDE_SLOT_WIDTH}px minmax(0, 1fr) ${TOPBAR_SIDE_SLOT_WIDTH}px` }}
       >
-        <div className="pointer-events-auto w-[372px] justify-self-start">
+        <div className="pointer-events-auto w-[382px] justify-self-start">
           <div className="text-[13px] font-semibold uppercase tracking-[0.18em] text-slate-700/84">
             Thinking Machine
           </div>
@@ -150,15 +150,18 @@ export default function TopBar({
           </motion.div>
         </div>
 
-        <div className="w-[372px] justify-self-end">
-          <div className="pointer-events-auto flex items-start gap-1 justify-end">
+        <div className="w-[382px] translate-x-[7px] justify-self-end">
+          <div className="pointer-events-auto flex w-full items-start justify-between">
             <div className="inline-flex rounded-full bg-white/80 px-1 py-0.5 shadow-sm border border-white/70">
               <button
                 type="button"
                 onClick={() => onCanvasModeChange?.("personal")}
                 className={`px-2.5 py-0.5 text-[10px] font-semibold rounded-full transition ${
-                  canvasMode === "personal" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-white"
+                  canvasMode === "personal"
+                    ? "text-white"
+                    : "text-slate-600 hover:bg-white"
                 }`}
+                style={canvasMode === "personal" ? { background: "linear-gradient(180deg, #3E5A8F 0%, #182338 100%)" } : undefined}
               >
                 Personal
               </button>
@@ -177,8 +180,9 @@ export default function TopBar({
                 type="button"
                 onClick={() => handleModeClick("research")}
                 className={`px-2 py-0.5 text-[10px] font-semibold rounded-full transition ${
-                  isResearch ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-white"
+                  isResearch ? "text-white" : "text-slate-600 hover:bg-white"
                 }`}
+                style={isResearch ? { background: "linear-gradient(180deg, #3E5A8F 0%, #182338 100%)" } : undefined}
               >
                 Research
               </button>
@@ -197,8 +201,9 @@ export default function TopBar({
                 type="button"
                 onClick={() => handleFlowClick("diverge")}
                 className={`px-2 py-0.5 text-[10px] font-semibold rounded-full transition ${
-                  isDiverge ? "bg-emerald-500 text-white" : "text-slate-600 hover:bg-white"
+                  isDiverge ? "text-white" : "text-slate-600 hover:bg-white"
                 }`}
+                style={isDiverge ? { background: "linear-gradient(180deg, #3E5A8F 0%, #182338 100%)" } : undefined}
               >
                 Diverge
               </button>
