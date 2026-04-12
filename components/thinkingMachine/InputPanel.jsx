@@ -66,6 +66,7 @@ export default function InputPanel({
   );
   const [onboardingExpired, setOnboardingExpired] = useState(false);
   const onboardingDismissedRef = useRef(false);
+  const shouldClearAfterAnalyzeRef = useRef(false);
 
   useEffect(() => {
     if (selectedNode || hasThinkingGraph || onboardingDismissedRef.current) {
@@ -80,6 +81,13 @@ export default function InputPanel({
     return () => window.clearTimeout(fadeTimer);
   }, [hasThinkingGraph, selectedNode]);
 
+  useEffect(() => {
+    if (!isAnalyzing && shouldClearAfterAnalyzeRef.current) {
+      shouldClearAfterAnalyzeRef.current = false;
+      setText("");
+    }
+  }, [isAnalyzing]);
+
   const showOnboardingHint = !selectedNode && !hasThinkingGraph && !onboardingExpired;
   const activeTypePrompt = TYPE_PROMPT_COPY[preferredType] || placeholderText || "";
   const visibleSuggestedTypes = (Array.isArray(suggestedTypes) ? suggestedTypes : []).slice(0, 3);
@@ -87,12 +95,12 @@ export default function InputPanel({
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!text.trim() || isAnalyzing) return;
+    shouldClearAfterAnalyzeRef.current = true;
     onSubmit?.({
       text,
       preferredType,
       selectedNode,
     });
-    setText("");
   };
 
   return (
@@ -144,23 +152,37 @@ export default function InputPanel({
                     {selectedNodePromptText || "Add a related thought to this node"}
                   </div>
                 ) : null}
-                <textarea
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSubmit(e);
+                <div className="relative">
+                  {isAnalyzing && text ? (
+                    <div
+                      className="pointer-events-none absolute inset-0 whitespace-pre-wrap break-words pr-1 text-[15px] leading-[1.5] composer-loading-gradient-text"
+                      aria-hidden="true"
+                    >
+                      {text}
+                    </div>
+                  ) : null}
+                  <textarea
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSubmit(e);
+                      }
+                    }}
+                    placeholder={
+                      selectedNode
+                        ? TYPE_PLACEHOLDER_COPY[preferredType] || `Add a related ${preferredType ? preferredType.toLowerCase() : "thought"}...`
+                        : TYPE_PLACEHOLDER_COPY[preferredType] || placeholderText || "Add a thought..."
                     }
-                  }}
-                  placeholder={
-                    selectedNode
-                      ? TYPE_PLACEHOLDER_COPY[preferredType] || `Add a related ${preferredType ? preferredType.toLowerCase() : "thought"}...`
-                      : TYPE_PLACEHOLDER_COPY[preferredType] || placeholderText || "Add a thought..."
-                  }
-                  className="w-full resize-none border-none bg-transparent text-[15px] text-slate-700 outline-none placeholder:text-slate-400 min-h-[48px] max-h-[180px]"
-                  disabled={isAnalyzing}
-                />
+                    className={`w-full resize-none border-none bg-transparent text-[15px] outline-none min-h-[48px] max-h-[180px] ${
+                      isAnalyzing && text
+                        ? "text-transparent caret-transparent placeholder:text-transparent"
+                        : "text-slate-700 placeholder:text-slate-400"
+                    }`}
+                    disabled={isAnalyzing}
+                  />
+                </div>
               </div>
 
               <button

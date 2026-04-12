@@ -172,3 +172,22 @@ h6,
   filter: saturate(1.05) brightness(1.02);
 }
 
+@keyframes composerGradientFlow {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
+.composer-loading-gradient-text {
+  background-image: linear-gradient(142.46deg, #7FD1DB 13.82%, #788DBC 66.77%, #586789 119.72%);
+  background-size: 200% 100%;
+  animation: composerGradientFlow 2.2s linear infinite;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
