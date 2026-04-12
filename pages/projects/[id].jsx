@@ -49,8 +49,8 @@ export default function ProjectWorkspacePage() {
 
   if (isLoading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-100">
-        <div className="rounded-3xl border border-white/10 bg-white/5 px-6 py-4 text-sm text-slate-300 backdrop-blur">
+      <main className="flex min-h-screen items-center justify-center bg-[#EFEFEF] text-slate-900">
+        <div className="rounded-3xl border border-black/10 bg-white px-6 py-4 text-sm text-slate-600 shadow-sm">
           Loading workspace...
         </div>
       </main>
@@ -58,7 +58,7 @@ export default function ProjectWorkspacePage() {
   }
 
   return (
-    <main className="relative min-h-screen bg-slate-950">
+    <main className="relative min-h-screen bg-[#EFEFEF]">
       <ThinkingMachine
         projectId={String(project?.id || id || "")}
         initialProjectTitle={project?.title || "Untitled Project"}

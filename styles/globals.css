@@ -7,7 +7,7 @@
   --font-family-ui: "Instrument Sans", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-family-heading: "Inter", "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-family-node-body: "Instrument Sans", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --canvas-bg-base: #a6ffd3;
+  --canvas-bg-base: #efefef;
   --canvas-stage-research-diverge: #4dd6f8;
   --canvas-stage-research-converge: #ffff86;
   --canvas-stage-ideation-diverge: #ff969f;
@@ -72,13 +72,7 @@ h6,
   inset: 0;
   pointer-events: none;
   z-index: 0;
-  background: radial-gradient(
-    ellipse var(--canvas-gradient-radius-x) var(--canvas-gradient-radius-y) at var(--canvas-gradient-center-x)
-      var(--canvas-gradient-center-y),
-    rgba(var(--canvas-stage-rgb), 0.68) 0%,
-    rgba(var(--canvas-stage-rgb), 0.44) 36%,
-    rgba(var(--canvas-stage-rgb), 0) 78%
-  );
+  background: none;
 }
 
 .tm-canvas-bg[data-stage="research-diverge"] {
