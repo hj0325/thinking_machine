@@ -107,9 +107,8 @@ export default function ThinkingMachine({
     const [nodes, setNodes, baseOnNodesChange] = useNodesState(INITIAL_NODES);
     const [edges, setEdges, onEdgesChange] = useEdgesState(INITIAL_EDGES);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
-    const [isDrawerOpen, setIsDrawerOpen] = useState(true);
+    const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [drawerMode, setDrawerMode] = useState("tip");
-    const [hasDrawerModeSelection, setHasDrawerModeSelection] = useState(false);
     const [stage, setStage] = useState("research-diverge");
     const [projectTitle, setProjectTitle] = useState(initialProjectTitle);
     const [canvasMode, setCanvasMode] = useState("personal");
@@ -157,9 +156,13 @@ export default function ThinkingMachine({
     });
 
     const handleDrawerModeChange = useCallback((nextMode) => {
-        setHasDrawerModeSelection(true);
+        if (nextMode === "chat" && isDrawerOpen && drawerMode === "chat") {
+            setIsDrawerOpen(false);
+            return;
+        }
+
         handleDrawerModeToggle(nextMode);
-    }, [handleDrawerModeToggle]);
+    }, [drawerMode, handleDrawerModeToggle, isDrawerOpen]);
 
     const {
         selectedDraftIds,
@@ -453,6 +456,7 @@ export default function ThinkingMachine({
             const firstThinkingNode = selectedNodes.find((node) => node?.type === "thinkingNode");
             if (firstThinkingNode?.id) {
                 setSelectedNodeId(firstThinkingNode.id);
+                setDrawerMode("chat");
                 setIsDrawerOpen(true);
             } else {
                 setSelectedNodeId(null);
@@ -696,6 +700,8 @@ export default function ThinkingMachine({
             setNodes(relaidNodes);
             setEdges(nextEdges);
             animateViewportToNodes(relaidViewportTargets.length ? relaidViewportTargets : viewportTargets);
+            setDrawerMode("chat");
+            setIsDrawerOpen(true);
             userNodeDatas.forEach((node) => {
                 recordProjectActivity("node_created", {
                     nodeId: node.id,
@@ -735,7 +741,7 @@ export default function ThinkingMachine({
                 onCanvasModeChange={setCanvasMode}
                 drawerMode={drawerMode}
                 onDrawerModeChange={handleDrawerModeChange}
-                hasDrawerModeSelection={hasDrawerModeSelection}
+                isDrawerOpen={isDrawerOpen}
             />
 
             {showAdminShortcutHint && (

@@ -43,7 +43,7 @@ export default function TopBar({
   onCanvasModeChange,
   drawerMode = "tip",
   onDrawerModeChange,
-  hasDrawerModeSelection = false,
+  isDrawerOpen = false,
 }) {
   const { mode, flow } = parseStage(stage);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -69,8 +69,8 @@ export default function TopBar({
   const isIdeation = mode === "design";
   const isDiverge = flow === "diverge";
   const isConverge = flow === "converge";
-  const isTipSelected = hasDrawerModeSelection && drawerMode === "tip";
-  const isChatSelected = hasDrawerModeSelection && drawerMode === "chat";
+  const isTipSelected = isDrawerOpen && drawerMode === "tip";
+  const isChatSelected = isDrawerOpen && drawerMode === "chat";
 
   const commitTitle = () => {
     const nextTitle = draftTitle.trim() || "Untitled Project";

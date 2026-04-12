@@ -435,8 +435,10 @@ export default function RightAgentDrawer({
     onChatSubmit?.();
   };
 
+  if (!isOpen) return null;
+
   return (
-    <div className="pointer-events-none absolute bottom-0 right-0 top-[58px] z-[45] overflow-visible">
+    <div className="pointer-events-none absolute bottom-0 right-0 top-[118px] z-[45] overflow-visible">
       <div className="relative flex h-full w-[365px] transform-gpu sm:w-[385px] lg:w-[397px]">
         <div
           className="pointer-events-none absolute inset-y-0 left-0 z-[0] w-[96px]"
