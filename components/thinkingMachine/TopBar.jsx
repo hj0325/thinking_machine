@@ -41,6 +41,9 @@ export default function TopBar({
   projectMetaLabel = "Project workspace",
   canvasMode = "personal",
   onCanvasModeChange,
+  drawerMode = "tip",
+  onDrawerModeChange,
+  hasDrawerModeSelection = false,
 }) {
   const { mode, flow } = parseStage(stage);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -66,6 +69,8 @@ export default function TopBar({
   const isIdeation = mode === "design";
   const isDiverge = flow === "diverge";
   const isConverge = flow === "converge";
+  const isTipSelected = hasDrawerModeSelection && drawerMode === "tip";
+  const isChatSelected = hasDrawerModeSelection && drawerMode === "chat";
 
   const commitTitle = () => {
     const nextTitle = draftTitle.trim() || "Untitled Project";
@@ -151,6 +156,7 @@ export default function TopBar({
         </div>
 
         <div className="w-[382px] translate-x-[7px] justify-self-end">
+          <div className="flex flex-col items-end gap-3">
           <div className="pointer-events-auto flex w-full items-start justify-between">
             <div className="inline-flex rounded-full bg-white/80 px-1 py-0.5 shadow-sm border border-white/70">
               <button
@@ -217,6 +223,45 @@ export default function TopBar({
                 Converge
               </button>
             </div>
+          </div>
+          <div className="pointer-events-auto flex w-full translate-y-[5px] justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => onDrawerModeChange?.("tip")}
+              className="inline-flex h-[44.75px] w-[44.75px] items-center justify-center rounded-full transition"
+              style={{
+                background: isTipSelected ? "linear-gradient(180deg, #3E5A8F 0%, #182338 100%)" : "#FFFFFF",
+                border: isTipSelected ? "none" : "0.965264px solid #364E7B",
+                color: isTipSelected ? "#FFFFFF" : "#2C4065",
+                boxShadow: isTipSelected ? "0 6px 14px rgba(24,35,56,0.22)" : "none",
+                fontFamily: '"Pretendard Variable", "Instrument Sans", sans-serif',
+                fontWeight: 600,
+                fontSize: "11.9258px",
+                lineHeight: "180%",
+                opacity: isTipSelected ? 1 : 0.88,
+              }}
+            >
+              Tip
+            </button>
+            <button
+              type="button"
+              onClick={() => onDrawerModeChange?.("chat")}
+              className="inline-flex h-[43.2px] w-[43.2px] items-center justify-center rounded-full transition"
+              style={{
+                background: isChatSelected ? "linear-gradient(180deg, #3E5A8F 0%, #182338 100%)" : "#FFFFFF",
+                border: isChatSelected ? "none" : "0.965264px solid #364E7B",
+                color: isChatSelected ? "#FFFFFF" : "#2C4065",
+                boxShadow: isChatSelected ? "0 6px 14px rgba(24,35,56,0.22)" : "none",
+                fontFamily: '"Pretendard Variable", "Instrument Sans", sans-serif',
+                fontWeight: 600,
+                fontSize: "11.5115px",
+                lineHeight: "180%",
+                opacity: isChatSelected ? 1 : 0.88,
+              }}
+            >
+              Chat
+            </button>
+          </div>
           </div>
         </div>
       </div>

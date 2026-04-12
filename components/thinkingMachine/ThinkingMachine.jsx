@@ -109,6 +109,7 @@ export default function ThinkingMachine({
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [isDrawerOpen, setIsDrawerOpen] = useState(true);
     const [drawerMode, setDrawerMode] = useState("tip");
+    const [hasDrawerModeSelection, setHasDrawerModeSelection] = useState(false);
     const [stage, setStage] = useState("research-diverge");
     const [projectTitle, setProjectTitle] = useState(initialProjectTitle);
     const [canvasMode, setCanvasMode] = useState("personal");
@@ -154,6 +155,11 @@ export default function ThinkingMachine({
         setDrawerMode,
         stage,
     });
+
+    const handleDrawerModeChange = useCallback((nextMode) => {
+        setHasDrawerModeSelection(true);
+        handleDrawerModeToggle(nextMode);
+    }, [handleDrawerModeToggle]);
 
     const {
         selectedDraftIds,
@@ -727,6 +733,9 @@ export default function ThinkingMachine({
                 projectMetaLabel="Project workspace"
                 canvasMode={canvasMode}
                 onCanvasModeChange={setCanvasMode}
+                drawerMode={drawerMode}
+                onDrawerModeChange={handleDrawerModeChange}
+                hasDrawerModeSelection={hasDrawerModeSelection}
             />
 
             {showAdminShortcutHint && (
@@ -855,7 +864,7 @@ export default function ThinkingMachine({
                         isOpen={isDrawerOpen}
                         mode={drawerMode}
                         suggestions={suggestions}
-                        onToggleMode={handleDrawerModeToggle}
+                        onToggleMode={handleDrawerModeChange}
                         activeSuggestion={activeSuggestion}
                         selectedNode={selectedNode}
                         linkedNodes={selectedNodeLinkedNodes}
