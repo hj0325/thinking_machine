@@ -633,13 +633,13 @@ export default function RightAgentDrawer({
                         <input
                           value={chatInput}
                           onChange={(event) => onChatInputChange?.(event.target.value)}
-                          placeholder={activeSuggestion ? "Continue the idea..." : "Select a context card to chat"}
-                          disabled={isChatLoading || !activeSuggestion}
+                          placeholder={selectedNode ? "Add a related thought..." : "Add a thought..."}
+                          disabled={isChatLoading}
                           className="min-w-0 flex-1 rounded-xl border border-white/70 bg-white/82 px-3 py-2 text-xs text-slate-700 outline-none placeholder:text-slate-400 focus:border-teal-300"
                         />
                         <button
                           type="submit"
-                          disabled={isChatLoading || !chatInput?.trim() || !activeSuggestion}
+                          disabled={isChatLoading || !chatInput?.trim()}
                           className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-teal-500 text-white transition hover:bg-teal-600 disabled:cursor-not-allowed disabled:opacity-50"
                           aria-label="Send message"
                         >

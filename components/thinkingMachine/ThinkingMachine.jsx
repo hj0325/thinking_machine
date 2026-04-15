@@ -140,7 +140,6 @@ export default function ThinkingMachine({
         isChatLoading,
         isChatConverting,
         handleDrawerModeToggle,
-        handleDrawerChatSubmit,
         handleDrawerChatConvertToNodes,
         handleDrawerContextSelect,
     } = useDrawerChat({
@@ -723,6 +722,17 @@ export default function ThinkingMachine({
         }
     }, [animateViewportToNodes, edges, highlightedNodeIds, nodes, projectTitle, recordProjectActivity, setEdges, setNodes, stage]);
 
+    const handleDrawerNodeSubmit = useCallback(async () => {
+        const trimmedText = chatInput.trim();
+        if (!trimmedText || isAnalyzing) return;
+
+        await handleInputSubmit({
+            text: trimmedText,
+            selectedNode,
+        });
+        setChatInput("");
+    }, [chatInput, handleInputSubmit, isAnalyzing, selectedNode, setChatInput]);
+
     return (
         <div className="w-full h-screen relative flex flex-col overflow-hidden bg-slate-50">
             <div
@@ -880,10 +890,10 @@ export default function ThinkingMachine({
                             onRefreshActivity={refreshProjectCollaborationMeta}
                             chatMessages={chatMessages}
                             chatInput={chatInput}
-                            isChatLoading={isChatLoading}
+                            isChatLoading={isAnalyzing || isChatLoading}
                             isChatConverting={isChatConverting}
                             onChatInputChange={setChatInput}
-                            onChatSubmit={handleDrawerChatSubmit}
+                            onChatSubmit={handleDrawerNodeSubmit}
                             onChatConvertToNodes={handleDrawerChatConvertToNodes}
                             onCommitCandidateNodes={handleCommitCandidateNodes}
                             onCommitCandidateNodesAsPrivate={handleCommitCandidateNodesAsPrivate}
