@@ -52,6 +52,7 @@ export default function NodeDetailCard({
   onSetVisibility,
   quickActions = [],
   modeLabel = "",
+  onClearSelection,
 }) {
   if (!selectedNode) return null;
 
@@ -73,11 +74,23 @@ export default function NodeDetailCard({
             {data.phase === "Solution" ? "Solution side" : "Problem side"} · {data.category}
           </div>
         </div>
-        <div className="flex flex-col items-end gap-1">
-          <MetaPill className={`${typeMeta.tint} ${typeMeta.text}`}>{data.category}</MetaPill>
-          <MetaPill className="bg-slate-900 text-white">
-            {data.phase === "Solution" ? "Solution" : "Problem"}
-          </MetaPill>
+        <div className="flex items-start gap-1.5">
+          <div className="flex flex-col items-end gap-1">
+            <MetaPill className={`${typeMeta.tint} ${typeMeta.text}`}>{data.category}</MetaPill>
+            <MetaPill className="bg-slate-900 text-white">
+              {data.phase === "Solution" ? "Solution" : "Problem"}
+            </MetaPill>
+          </div>
+          {onClearSelection ? (
+            <button
+              type="button"
+              onClick={onClearSelection}
+              className="ml-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 bg-white/80 text-[10px] font-bold text-slate-500 shadow-sm transition hover:bg-slate-50 hover:text-slate-700"
+              aria-label="Clear selected node"
+            >
+              ✕
+            </button>
+          ) : null}
         </div>
       </div>
 

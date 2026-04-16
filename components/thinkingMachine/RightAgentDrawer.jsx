@@ -53,6 +53,7 @@ export default function RightAgentDrawer({
   chatButtonRef,
   chatDropZoneRef,
   isChatDropActive,
+  onClearSelectedNode,
 }) {
   const isTip = mode === "tip";
   const isChat = mode === "chat";
@@ -210,28 +211,6 @@ export default function RightAgentDrawer({
                 className={`shrink-0 overflow-y-auto overflow-x-visible pl-0.5 pr-2 pb-3`}
                 style={{ maxHeight: "26%", paddingTop: DRAWER_TOP_SAFE_ZONE, scrollbarWidth: "none" }}
               >
-                <div className="mb-2 flex items-center justify-between px-0.5">
-                  <div className="inline-flex rounded-full bg-white/80 p-1 text-[11px] font-semibold text-slate-600 shadow-sm">
-                    <button
-                      type="button"
-                      onClick={() => onToggleMode?.("tip")}
-                      className={`rounded-full px-3 py-0.5 transition ${
-                        isTip ? "bg-slate-900 text-white shadow-sm" : "text-slate-500 hover:bg-slate-100"
-                      }`}
-                    >
-                      {copy.suggestionsTab}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onToggleMode?.("chat")}
-                      className={`rounded-full px-3 py-0.5 transition ${
-                        isChat ? "bg-slate-900 text-white shadow-sm" : "text-slate-500 hover:bg-slate-100"
-                      }`}
-                    >
-                      {copy.workspaceTab}
-                    </button>
-                  </div>
-                </div>
                 {isTip ? (
                   <div className={`grid grid-cols-2 gap-2`}>
                     {contextItems.length > 0 ? (
@@ -277,6 +256,7 @@ export default function RightAgentDrawer({
                       onDemote={onDemoteSelectedNode}
                       onShare={() => onSetNodeVisibility?.(selectedNode?.id, "shared")}
                       onSetVisibility={(nextVisibility) => onSetNodeVisibility?.(selectedNode?.id, nextVisibility)}
+                      onClearSelection={onClearSelectedNode}
                     />
 
                     {activeSuggestion ? (

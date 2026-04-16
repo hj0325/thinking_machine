@@ -398,6 +398,41 @@ export default function ThinkingMachine({
         }
     }, [selectedNodeId, visibleCanvasNodeIds]);
 
+    // 선택된 노드를 기반으로 AI 의견이 항상 Workspace 상단에 보이도록
+    // 자동 attachedNodes suggestion 을 만든다.
+    useEffect(() => {
+        if (!selectedNode) return;
+        // 사용자가 명시적으로 선택한 제안(activeSuggestion)이 있으면 건드리지 않는다.
+        if (activeSuggestion && activeSuggestion._source !== "node-auto") return;
+        if (activeSuggestion && activeSuggestion._source === "node-auto" && activeSuggestion.nodeId === selectedNode.id) {
+            return;
+        }
+
+        const autoSuggestion = {
+            id: `node-auto-${selectedNode.id}`,
+            nodeId: selectedNode.id,
+            _source: "node-auto",
+            type: "attachedNodes",
+            title: selectedNode.data?.title || "",
+            content: selectedNode.data?.content || "",
+            category: selectedNode.data?.category,
+            phase: selectedNode.data?.phase,
+            attached_nodes: [
+                {
+                    id: selectedNode.id,
+                    title: selectedNode.data?.title || "",
+                    content: selectedNode.data?.content || "",
+                    category: selectedNode.data?.category,
+                    phase: selectedNode.data?.phase,
+                },
+            ],
+        };
+
+        setActiveSuggestion(autoSuggestion);
+        setDrawerMode("chat");
+        setIsDrawerOpen(true);
+    }, [activeSuggestion, selectedNode, setActiveSuggestion, setDrawerMode, setIsDrawerOpen]);
+
     const handlePromoteSelectedNode = useCallback(() => {
         if (!selectedNodeId || !selectedNode) return;
         handleSetNodeVisibility(selectedNodeId, getNextVisibility(selectedNode.data?.visibility));
@@ -407,6 +442,11 @@ export default function ThinkingMachine({
         if (!selectedNodeId || !selectedNode) return;
         handleSetNodeVisibility(selectedNodeId, getPreviousVisibility(selectedNode.data?.visibility));
     }, [handleSetNodeVisibility, selectedNode, selectedNodeId]);
+
+    const handleClearSelectedNode = useCallback(() => {
+        setSelectedNodeId(null);
+        setActiveSuggestion(null);
+    }, [setActiveSuggestion]);
 
     const pendingCandidatePreview = useMemo(() => {
         if (!pendingChatCandidateGraph) return null;
@@ -638,6 +678,7 @@ export default function ThinkingMachine({
                             chatButtonRef={chatButtonRef}
                             chatDropZoneRef={chatDropZoneRef}
                             isChatDropActive={isChatDropActive}
+                            onClearSelectedNode={handleClearSelectedNode}
                         />
                     ) : null}
                 </AnimatePresence>
