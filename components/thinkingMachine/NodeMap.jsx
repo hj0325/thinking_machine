@@ -11,6 +11,7 @@ import PostitDraftNode from "./nodes/PostitDraftNode";
 import ImageDraftNode from "./nodes/ImageDraftNode";
 import IdeaGroupNode from "./nodes/IdeaGroupNode";
 import ConnectorEdge from "./edges/ConnectorEdge";
+import { useNodePorts } from "@/components/thinkingMachine/hooks/useNodePorts";
 
 export default function NodeMap({
     nodes,
@@ -41,53 +42,13 @@ export default function NodeMap({
     );
     const edgeTypes = useMemo(() => ({ connectorEdge: ConnectorEdge }), []);
 
-    const portVisibilityByNode = useMemo(() => {
-        const map = new Map();
-        edges.forEach((edge) => {
-            if (edge?.source) {
-                const current = map.get(edge.source) || { hasLeftPort: false, hasRightPort: false };
-                current.hasRightPort = true;
-                map.set(edge.source, current);
-            }
-            if (edge?.target) {
-                const current = map.get(edge.target) || { hasLeftPort: false, hasRightPort: false };
-                current.hasLeftPort = true;
-                map.set(edge.target, current);
-            }
-        });
-        return map;
-    }, [edges]);
-
-    // highlightedNodeIds/연결 포트 상태 기반으로 노드 표시 상태를 항상 최신 유지
-    const displayNodes = useMemo(() => {
-        const hasHighlightSet = highlightedNodeIds instanceof Set;
-        return nodes.map((n) => ({
-            ...n,
-            data: {
-                ...n.data,
-                hasLeftPort: portVisibilityByNode.get(n.id)?.hasLeftPort || false,
-                hasRightPort: portVisibilityByNode.get(n.id)?.hasRightPort || false,
-                ...(n.type === "postitDraft"
-                    ? {
-                        onChangeText: draftHandlers?.onPostitChangeText,
-                        onSubmit: draftHandlers?.onDraftSubmit,
-                        isSubmitting: Boolean(draftSubmittingIds?.has?.(n.id)),
-                    }
-                    : {}),
-                ...(n.type === "imageDraft"
-                    ? {
-                        onPickImage: draftHandlers?.onImagePick,
-                        onChangeCaption: draftHandlers?.onImageChangeCaption,
-                        onSubmit: draftHandlers?.onDraftSubmit,
-                        isSubmitting: Boolean(draftSubmittingIds?.has?.(n.id)),
-                    }
-                    : {}),
-            },
-            className: [n.className || "", hasHighlightSet && highlightedNodeIds.has(n.id) ? "node-highlighted" : ""]
-                .filter(Boolean)
-                .join(" "),
-        }));
-    }, [nodes, highlightedNodeIds, portVisibilityByNode, draftHandlers, draftSubmittingIds]);
+    const { displayNodes } = useNodePorts({
+        nodes,
+        edges,
+        highlightedNodeIds,
+        draftHandlers,
+        draftSubmittingIds,
+    });
 
     return (
         <div className="tm-canvas-bg h-full w-full" data-stage={canvasStage}>

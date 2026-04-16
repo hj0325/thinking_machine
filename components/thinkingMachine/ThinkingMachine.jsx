@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     useNodesState,
     useEdgesState,
@@ -13,19 +13,20 @@ import RightAgentDrawer from "./RightAgentDrawer";
 import TopBar from "./TopBar";
 import { toConnectorEdges } from "@/lib/thinkingMachine/connectorEdges";
 import { toReactFlowNode } from "@/lib/thinkingMachine/reactflowTransforms";
-import { computeNodeBounds, relayoutTopLevelThinkingNodes, shiftClusterRelativeToAnchor, shiftClusterRightOfExisting } from "@/lib/thinkingMachine/graphMerge";
-import { analyze } from "@/lib/thinkingMachine/apiClient";
-import { useAdminMode } from "@/components/thinkingMachine/hooks/useAdminMode";
-import { useDrawerChat } from "@/components/thinkingMachine/hooks/useDrawerChat";
+import { computeNodeBounds, relayoutTopLevelThinkingNodes, shiftClusterRightOfExisting } from "@/lib/thinkingMachine/graphMerge";
+import { useAdminMode } from "@/hooks/useAdminMode";
 import { useDraftGrouping } from "@/components/thinkingMachine/hooks/useDraftGrouping";
 import { useGhostDragToChat } from "@/components/thinkingMachine/hooks/useGhostDragToChat";
+import { useThinkingCollaboration } from "@/components/thinkingMachine/hooks/useThinkingCollaboration";
+import { useThinkingGraphState } from "@/components/thinkingMachine/hooks/useThinkingGraphState";
+import { useThinkingAiAnalyze } from "@/components/thinkingMachine/hooks/useThinkingAiAnalyze";
+import { useRightDrawerChat } from "@/components/thinkingMachine/hooks/useRightDrawerChat";
 import {
     getReasoningModeProfile,
     getRoleMeta,
     getNextVisibility,
     getPreviousVisibility,
     normalizeReasoningStage,
-    normalizeOwnerId,
     normalizeRelationLabel,
     normalizeVisibility,
 } from "@/lib/thinkingMachine/nodeMeta";
@@ -34,63 +35,9 @@ const INITIAL_NODES = [];
 const INITIAL_EDGES = [];
 const ADMIN_MODE_STORAGE_KEY = "vtm-admin-mode-enabled";
 const ADMIN_HINT_DISMISSED_KEY = "vtm-admin-shortcut-hint-dismissed";
-const PERSONAL_VISIBILITY = new Set(["private", "candidate"]);
-const TEAM_VISIBILITY = new Set(["shared", "reviewed", "agreed"]);
 const MOCK_CURRENT_USER_ID = "mock-user-1";
 const MOCK_CURRENT_USER_ROLE = "owner";
-const PROJECTS_STORAGE_KEY = "thinking-machine-projects";
-const AUTO_REFRESH_MS = 15000;
-const MAX_ACTIVITY_ITEMS = 24;
 const AUTO_FIT_MAX_ZOOM = 1;
-
-function mergeSuggestionUnique(prev, nextSuggestion) {
-    if (!nextSuggestion) return prev;
-    const key = `${String(nextSuggestion.category || "").toLowerCase()}::${String(nextSuggestion.title || "").trim().toLowerCase()}::${String(nextSuggestion.content || "").trim().toLowerCase()}`;
-    const existingIndex = prev.findIndex((item) => {
-        const existingKey = `${String(item?.category || "").toLowerCase()}::${String(item?.title || "").trim().toLowerCase()}::${String(item?.content || "").trim().toLowerCase()}`;
-        return existingKey === key;
-    });
-    if (existingIndex === -1) return [nextSuggestion, ...prev];
-    const clone = [...prev];
-    clone.splice(existingIndex, 1);
-    return [nextSuggestion, ...clone];
-}
-
-function getActivityStorageKey(projectId) {
-    return `thinking-machine-activity-${projectId}`;
-}
-
-function readProjectsFromStorage() {
-    if (typeof window === "undefined") return [];
-    try {
-        const raw = window.localStorage.getItem(PROJECTS_STORAGE_KEY);
-        const parsed = raw ? JSON.parse(raw) : [];
-        return Array.isArray(parsed) ? parsed : [];
-    } catch {
-        return [];
-    }
-}
-
-function writeProjectsToStorage(projects) {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(PROJECTS_STORAGE_KEY, JSON.stringify(projects));
-}
-
-function readActivityLog(projectId) {
-    if (typeof window === "undefined" || !projectId) return [];
-    try {
-        const raw = window.localStorage.getItem(getActivityStorageKey(projectId));
-        const parsed = raw ? JSON.parse(raw) : [];
-        return Array.isArray(parsed) ? parsed : [];
-    } catch {
-        return [];
-    }
-}
-
-function writeActivityLog(projectId, entries) {
-    if (typeof window === "undefined" || !projectId) return;
-    window.localStorage.setItem(getActivityStorageKey(projectId), JSON.stringify(entries.slice(0, MAX_ACTIVITY_ITEMS)));
-}
 
 function cubicOut(t) {
     return 1 - Math.pow(1 - t, 3);
@@ -113,9 +60,6 @@ export default function ThinkingMachine({
     const [isCanvasInteractive, setIsCanvasInteractive] = useState(true);
     const [selectedNodeId, setSelectedNodeId] = useState(null);
     const [pendingChatCandidateGraph, setPendingChatCandidateGraph] = useState(null);
-    const [projectLastUpdated, setProjectLastUpdated] = useState(null);
-    const [activityLog, setActivityLog] = useState([]);
-    const [lastRefreshedAt, setLastRefreshedAt] = useState(null);
 
     const { isAdminMode } = useAdminMode({
         storageKey: ADMIN_MODE_STORAGE_KEY,
@@ -142,7 +86,7 @@ export default function ThinkingMachine({
         handleDrawerChatSubmit,
         handleDrawerChatConvertToNodes,
         handleDrawerContextSelect,
-    } = useDrawerChat({
+    } = useRightDrawerChat({
         suggestions,
         nodes,
         onPreviewNodesFromChat: handlePreviewNodesFromChat,
@@ -204,49 +148,18 @@ export default function ThinkingMachine({
         setIsDrawerOpen,
     });
 
-    const hasThinkingGraph = useMemo(() => {
-        // 그래프가 없더라도 포스트잇/이미지 초안만 있어도 캔버스를 보여주기 위해 드래프트 타입도 포함
-        return nodes.some((n) =>
-            n?.type === "thinkingNode" ||
-            n?.type === "ideaGroup" ||
-            n?.type === "postitDraft" ||
-            n?.type === "imageDraft"
-        );
-    }, [nodes]);
     const currentRoleMeta = getRoleMeta(MOCK_CURRENT_USER_ROLE);
 
-    const refreshProjectCollaborationMeta = useCallback(() => {
-        if (!projectId || typeof window === "undefined") return;
-        const projects = readProjectsFromStorage();
-        const matchedProject = projects.find((item) => item?.id === projectId) || null;
-        const nextActivity = readActivityLog(projectId);
-        startTransition(() => {
-            setProjectLastUpdated(matchedProject?.updatedAt || null);
-            setActivityLog(nextActivity);
-            setLastRefreshedAt(new Date().toISOString());
-        });
-    }, [projectId]);
-
-    const recordProjectActivity = useCallback((actionType, payload = {}) => {
-        if (!projectId || typeof window === "undefined") return;
-        const timestamp = new Date().toISOString();
-        const nextProjects = readProjectsFromStorage().map((project) =>
-            project?.id === projectId ? { ...project, updatedAt: timestamp } : project
-        );
-        writeProjectsToStorage(nextProjects);
-
-        const nextEntry = {
-            id: `${actionType}-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`,
-            type: actionType,
-            timestamp,
-            userId: MOCK_CURRENT_USER_ID,
-            userRole: MOCK_CURRENT_USER_ROLE,
-            ...payload,
-        };
-        const nextActivity = [nextEntry, ...readActivityLog(projectId)].slice(0, MAX_ACTIVITY_ITEMS);
-        writeActivityLog(projectId, nextActivity);
-        refreshProjectCollaborationMeta();
-    }, [projectId, refreshProjectCollaborationMeta]);
+    const {
+        projectLastUpdated,
+        activityLog,
+        lastRefreshedAt,
+        recordProjectActivity,
+    } = useThinkingCollaboration({
+        projectId,
+        currentUserId: MOCK_CURRENT_USER_ID,
+        currentUserRole: MOCK_CURRENT_USER_ROLE,
+    });
 
     const handleFlowInit = (instance) => {
         reactFlowRef.current = instance;
@@ -298,18 +211,6 @@ export default function ThinkingMachine({
             });
         }
     }, []);
-
-    useEffect(() => {
-        refreshProjectCollaborationMeta();
-    }, [refreshProjectCollaborationMeta]);
-
-    useEffect(() => {
-        if (!projectId) return undefined;
-        const intervalId = window.setInterval(() => {
-            refreshProjectCollaborationMeta();
-        }, AUTO_REFRESH_MS);
-        return () => window.clearInterval(intervalId);
-    }, [projectId, refreshProjectCollaborationMeta]);
 
     // 채팅 대화에서 노드+엣지 추가
     const handleAddNodesFromChat = useCallback((data, { commitVisibility = "shared" } = {}) => {
@@ -475,71 +376,20 @@ export default function ThinkingMachine({
         [handleSelectionChange]
     );
 
-    const selectedNode = useMemo(
-        () => nodes.find((node) => node?.id === selectedNodeId && node?.type === "thinkingNode") || null,
-        [nodes, selectedNodeId]
-    );
-
-    const visibleCanvasNodeIds = useMemo(() => {
-        const visibleIds = new Set();
-
-        const isThinkingNodeVisible = (node) => {
-            const visibility = normalizeVisibility(node?.data?.visibility);
-            const ownerId = normalizeOwnerId(node?.data?.ownerId);
-            if (canvasMode === "personal") return ownerId === MOCK_CURRENT_USER_ID && PERSONAL_VISIBILITY.has(visibility);
-            return TEAM_VISIBILITY.has(visibility);
-        };
-
-        nodes.forEach((node) => {
-            if (!node?.id) return;
-
-            if (node.type === "thinkingNode") {
-                if (isThinkingNodeVisible(node)) {
-                    visibleIds.add(node.id);
-                    if (node.parentNode) visibleIds.add(node.parentNode);
-                }
-                return;
-            }
-
-            if (canvasMode === "personal" && (node.type === "postitDraft" || node.type === "imageDraft")) {
-                visibleIds.add(node.id);
-                if (node.parentNode) visibleIds.add(node.parentNode);
-                return;
-            }
-
-            if (node.type === "ideaGroup") {
-                const hasVisibleChildren = nodes.some((candidate) => candidate?.parentNode === node.id && visibleIds.has(candidate.id));
-                if (hasVisibleChildren) visibleIds.add(node.id);
-            }
-        });
-
-        nodes.forEach((node) => {
-            if (node?.type === "ideaGroup") {
-                const hasVisibleChildren = nodes.some((candidate) => candidate?.parentNode === node.id && visibleIds.has(candidate.id));
-                if (hasVisibleChildren) visibleIds.add(node.id);
-            }
-        });
-
-        return visibleIds;
-    }, [canvasMode, nodes]);
-
-    const canvasNodes = useMemo(
-        () =>
-            nodes
-                .filter((node) => visibleCanvasNodeIds.has(node.id))
-                .map((node) => ({
-                    ...node,
-                    className: [node.className || "", node.id === selectedNodeId ? "node-selected-focus" : ""]
-                        .filter(Boolean)
-                        .join(" "),
-                })),
-        [nodes, selectedNodeId, visibleCanvasNodeIds]
-    );
-
-    const canvasEdges = useMemo(
-        () => edges.filter((edge) => visibleCanvasNodeIds.has(edge?.source) && visibleCanvasNodeIds.has(edge?.target)),
-        [edges, visibleCanvasNodeIds]
-    );
+    const {
+        hasThinkingGraph,
+        selectedNode,
+        visibleCanvasNodeIds,
+        canvasNodes,
+        canvasEdges,
+        selectedNodeLinkedNodes,
+    } = useThinkingGraphState({
+        nodes,
+        edges,
+        selectedNodeId,
+        canvasMode,
+        currentUserId: MOCK_CURRENT_USER_ID,
+    });
 
     useEffect(() => {
         if (selectedNodeId && !visibleCanvasNodeIds.has(selectedNodeId)) {
@@ -556,28 +406,6 @@ export default function ThinkingMachine({
         if (!selectedNodeId || !selectedNode) return;
         handleSetNodeVisibility(selectedNodeId, getPreviousVisibility(selectedNode.data?.visibility));
     }, [handleSetNodeVisibility, selectedNode, selectedNodeId]);
-
-    const selectedNodeLinkedNodes = useMemo(() => {
-        if (!selectedNode) return [];
-        const nodeMap = new Map(nodes.map((node) => [node.id, node]));
-        return edges
-            .filter((edge) => edge?.source === selectedNode.id || edge?.target === selectedNode.id)
-            .map((edge) => {
-                const isOutgoing = edge.source === selectedNode.id;
-                const linkedId = isOutgoing ? edge.target : edge.source;
-                const linkedNode = nodeMap.get(linkedId);
-                if (!linkedNode || linkedNode.type !== "thinkingNode") return null;
-                return {
-                    id: linkedNode.id,
-                    title: linkedNode.data?.title || "Untitled node",
-                    category: linkedNode.data?.category,
-                    visibility: linkedNode.data?.visibility,
-                    relation: normalizeRelationLabel(edge?.data?.label || edge?.label),
-                    direction: isOutgoing ? "outgoing" : "incoming",
-                };
-            })
-            .filter(Boolean);
-    }, [edges, nodes, selectedNode]);
 
     const pendingCandidatePreview = useMemo(() => {
         if (!pendingChatCandidateGraph) return null;
@@ -614,129 +442,22 @@ export default function ThinkingMachine({
         return reasoningModeProfile.composerHint;
     }, [reasoningModeProfile, selectedNode]);
 
-    const handleInputSubmit = useCallback(async ({ text, preferredType, selectedNode: inputContextNode } = {}) => {
-        const rawText = typeof text === "string" ? text.trim() : "";
-        if (!rawText) return;
-        setIsAnalyzing(true);
-
-        try {
-            const contextualText = inputContextNode
-                ? [
-                    `Project: ${projectTitle}`,
-                    `Selected node context: [${inputContextNode.data?.category}] ${inputContextNode.data?.title} - ${inputContextNode.data?.content || ""}`,
-                    preferredType ? `Preferred new node type: ${preferredType}.` : "",
-                    `User follow-up: ${rawText}`,
-                  ].filter(Boolean).join("\n")
-                : [projectTitle ? `Project: ${projectTitle}` : "", rawText].filter(Boolean).join("\n");
-
-            const payload = {
-                text: contextualText,
-                history: nodes.map((n) => ({
-                    id: n.id,
-                    data: {
-                        title: n.data.title,
-                        category: n.data.category,
-                        phase: n.data.phase,
-                    },
-                    position: n.position,
-                })),
-                stage,
-            };
-
-            const data = await analyze(payload);
-
-            // 제안 노드(is_ai_generated=true)와 사용자 노드 분리
-            const suggestionNodeData = data.nodes.find((n) => n.data.is_ai_generated);
-            const userNodeDatas = data.nodes
-                .filter((n) => !n.data.is_ai_generated)
-                .map((n) => ({
-                    ...n,
-                    data: {
-                        ...n.data,
-                        ownerId: MOCK_CURRENT_USER_ID,
-                        editedBy: "You",
-                        visibility: "private",
-                    },
-                }));
-
-            // e-suggest- 엣지에서 연결된 사용자 노드 ID 파악
-            const suggestEdge = data.edges.find((e) => e.id.startsWith("e-suggest-"));
-            const highlightedMainNodeId = suggestEdge ? suggestEdge.source : null;
-
-            // 사용자 노드 → ReactFlow
-            const rawNewNodes = userNodeDatas.map((n) => toReactFlowNode(n, highlightedMainNodeId));
-            const enrichedNodes = inputContextNode
-                ? shiftClusterRelativeToAnchor(inputContextNode, rawNewNodes)
-                : nodes.length
-                    ? shiftClusterRightOfExisting(nodes, rawNewNodes)
-                    : rawNewNodes;
-            const viewportTargets = inputContextNode ? [inputContextNode, ...enrichedNodes] : enrichedNodes;
-
-            // 제안 노드 → SuggestionPanel
-            if (suggestionNodeData) {
-                const newSuggestion = {
-                    id: `suggestion-${Date.now()}`,
-                    title: suggestionNodeData.data.label,
-                    content: suggestionNodeData.data.content,
-                    category: suggestionNodeData.data.category,
-                    phase: suggestionNodeData.data.phase,
-                    sourceType: suggestionNodeData.data.sourceType,
-                    visibility: suggestionNodeData.data.visibility,
-                    confidence: suggestionNodeData.data.confidence,
-                    ownerId: suggestionNodeData.data.ownerId,
-                    relatedNodeId: highlightedMainNodeId,
-                };
-                setSuggestions((prev) => mergeSuggestionUnique(prev, newSuggestion));
-                if (highlightedMainNodeId) {
-                    setHighlightedNodeIds((prev) => new Set([...prev, highlightedMainNodeId]));
-                }
-            }
-
-            // 엣지 처리 (e-suggest- 제외)
-            const updatedExistingNodes = nodes.map((n) => ({
-                ...n,
-                className: highlightedNodeIds.has(n.id) ? 'node-highlighted' : (n.className || ''),
-            }));
-            const mergedNodes = [...updatedExistingNodes, ...enrichedNodes];
-            const rawEdges = data.edges.filter((e) => !e.id.startsWith("e-suggest-"));
-            const newReactFlowEdges = toConnectorEdges(rawEdges, mergedNodes, edges);
-            const nextEdges = [...edges, ...newReactFlowEdges];
-            const relaidNodes = relayoutTopLevelThinkingNodes(mergedNodes, nextEdges);
-            const insertedIds = new Set(enrichedNodes.map((node) => node.id));
-            const relaidViewportTargets = inputContextNode
-                ? relaidNodes.filter((node) => node.id === inputContextNode.id || insertedIds.has(node.id))
-                : relaidNodes.filter((node) => insertedIds.has(node.id));
-
-            setNodes(relaidNodes);
-            setEdges(nextEdges);
-            animateViewportToNodes(relaidViewportTargets.length ? relaidViewportTargets : viewportTargets);
-            setDrawerMode("tip");
-            setIsDrawerOpen(true);
-            userNodeDatas.forEach((node) => {
-                recordProjectActivity("node_created", {
-                    nodeId: node.id,
-                    nodeTitle: node?.data?.label,
-                    nodeType: node?.data?.category,
-                });
-                if (node?.data?.category === "Conflict") {
-                    recordProjectActivity("conflict_created", {
-                        nodeId: node.id,
-                        nodeTitle: node?.data?.label,
-                    });
-                }
-            });
-
-        } catch (error) {
-            console.error("Failed to analyze input:", error);
-            const serverMsg =
-                error?.response?.data?.error ||
-                error?.response?.data?.detail ||
-                error?.message;
-            alert(serverMsg ? `AI Agent error: ${serverMsg}` : "AI Agent error. Please try again.");
-        } finally {
-            setIsAnalyzing(false);
-        }
-    }, [animateViewportToNodes, edges, highlightedNodeIds, nodes, projectTitle, recordProjectActivity, setEdges, setNodes, stage]);
+    const { handleInputSubmit } = useThinkingAiAnalyze({
+        nodes,
+        edges,
+        stage,
+        projectTitle,
+        setNodes,
+        setEdges,
+        setSuggestions,
+        setHighlightedNodeIds,
+        setDrawerMode,
+        setIsDrawerOpen,
+        recordProjectActivity,
+        animateViewportToNodes,
+        setIsAnalyzing,
+        currentUserId: MOCK_CURRENT_USER_ID,
+    });
 
     // 우측 Drawer 하단 입력창 동작:
     // - 기본(컨텍스트 없음)일 때: 사용자 입력을 기반으로 /api/analyze 를 호출해 새 노드 + 제안 생성
