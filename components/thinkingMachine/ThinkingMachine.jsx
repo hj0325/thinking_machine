@@ -369,9 +369,10 @@ export default function ThinkingMachine({
                 setSelectedNodeId(firstThinkingNode.id);
                 setDrawerMode("chat");
                 setIsDrawerOpen(true);
-            } else {
-                setSelectedNodeId(null);
             }
+            // 캔버스 빈 공간을 클릭해도 선택만 해제되고,
+            // 마지막으로 본 노드 컨텍스트와 AI 의견은 그대로 유지되도록
+            // 선택 노드를 강제로 null 로 리셋하지 않는다.
         },
         [handleSelectionChange]
     );

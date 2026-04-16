@@ -293,7 +293,11 @@ export function useDraftGrouping({
         const thinkingAreaH = seedMaxY + 40;
 
         const groupW = Math.max(DRAFT_AREA_W, thinkingAreaW, 520);
-        const groupH = Math.max(DRAFT_AREA_H, thinkingAreaH, 360);
+        // Height는 원래 드래프트 위치(DRAFT_AREA_H)에 끌려 지나치게 커지는 문제가 있어
+        // 실제 생성된 사고 노드(thinkingAreaH)를 기준으로 적당한 여유만 두고 계산한다.
+        const GROUP_MIN_H = 360;
+        const GROUP_EXTRA_MARGIN_H = 72;
+        const groupH = Math.max(thinkingAreaH + GROUP_EXTRA_MARGIN_H, GROUP_MIN_H);
 
         const groupNode = {
           id: groupId,

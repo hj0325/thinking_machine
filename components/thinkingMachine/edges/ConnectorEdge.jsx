@@ -3,7 +3,7 @@
 import { BaseEdge } from "reactflow";
 import { getTypeMeta } from "@/lib/thinkingMachine/nodeMeta";
 
-const DEFAULT_LINE_COLOR = "rgba(255, 255, 255, 0.68)";
+const DEFAULT_LINE_COLOR = "#AAF17B";
 const DEFAULT_LINE_WIDTH = 1.65;
 const DEFAULT_CLEARANCE = 20;
 const OUTER_RADIUS = 7;
@@ -252,7 +252,9 @@ export default function ConnectorEdge({
   const targetOffsetY = toFiniteNumber(data?.targetOffsetY, 0);
   const clearanceX = toFiniteNumber(data?.clearanceX, DEFAULT_CLEARANCE);
   const laneGap = toFiniteNumber(data?.laneGap, DEFAULT_LANE_GAP);
-  const lineColor = data?.lineColor || DEFAULT_LINE_COLOR;
+  // 선 색상은 항상 디자인 토큰(DEFAULT_LINE_COLOR)을 사용해
+  // 코드 수정 시 기존 엣지도 즉시 색상이 갱신되도록 한다.
+  const lineColor = DEFAULT_LINE_COLOR;
   const lineWidth = toFiniteNumber(data?.lineWidth, DEFAULT_LINE_WIDTH);
   const curveTension = toFiniteNumber(data?.curveTension, DEFAULT_CURVE_TENSION);
 

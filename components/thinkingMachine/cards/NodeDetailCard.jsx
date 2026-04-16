@@ -67,11 +67,28 @@ export default function NodeDetailCard({
   return (
     <div className="rounded-2xl border border-white/70 bg-white/70 p-3 shadow-sm">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Selected node</div>
-        <MetaPill className={`${typeMeta.tint} ${typeMeta.text}`}>{data.category}</MetaPill>
+        <div>
+          <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Selected node</div>
+          <div className="mt-0.5 text-[11px] font-semibold text-slate-500">
+            {data.phase === "Solution" ? "Solution side" : "Problem side"} · {data.category}
+          </div>
+        </div>
+        <div className="flex flex-col items-end gap-1">
+          <MetaPill className={`${typeMeta.tint} ${typeMeta.text}`}>{data.category}</MetaPill>
+          <MetaPill className="bg-slate-900 text-white">
+            {data.phase === "Solution" ? "Solution" : "Problem"}
+          </MetaPill>
+        </div>
       </div>
-      <div className="font-heading text-sm font-semibold text-slate-800">{selectedNode.data?.title || "Untitled node"}</div>
-      <div className="mt-1 text-xs leading-relaxed text-slate-600">{selectedNode.data?.content || "No content yet."}</div>
+
+      <div className="font-heading text-sm font-semibold text-slate-800">
+        {selectedNode.data?.title || "Untitled node"}
+      </div>
+      <div className="mt-1 rounded-xl bg-slate-50/80 px-2.5 py-1.5 text-[11px] leading-relaxed text-slate-700">
+        {selectedNode.data?.content && selectedNode.data.content.trim().length > 0
+          ? selectedNode.data.content
+          : "Add one clear sentence that captures what this node is about."}
+      </div>
       <div className="mt-2 flex flex-wrap gap-1.5">
         <MetaPill className={roleMeta.className}>{roleMeta.label}</MetaPill>
         <MetaPill className={sourceMeta.className}>{sourceMeta.label}</MetaPill>
