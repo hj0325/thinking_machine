@@ -139,46 +139,125 @@ export default function TopBar({
         <div />
 
         <div className="w-[382px] translate-x-[7px] justify-self-end">
-          <div className="flex flex-col items-end gap-3">
-          <div className="pointer-events-auto flex w-full items-start justify-end">
-            <div
-              className="inline-flex h-[27px] w-[130px] items-center rounded-[25px] px-[3px] shadow-[0.5px_1px_5px_rgba(0,0,0,0.1)]"
-              style={{ background: "#F6F6F2" }}
-            >
-              <button
-                type="button"
-                onClick={() => onCanvasModeChange?.("personal")}
-                className="inline-flex h-[22px] w-[64px] items-center justify-center rounded-[25px] transition"
-                style={{
-                  background: canvasMode === "personal" ? "#7BA592" : "transparent",
-                  fontFamily: '"Pretendard Variable", "Instrument Sans", sans-serif',
-                  fontStyle: "normal",
-                  fontWeight: 700,
-                  fontSize: "10.3838px",
-                  lineHeight: "180%",
-                  color: canvasMode === "personal" ? "#FFFFFF" : "#929B94",
-                }}
+          <div className="flex flex-col items-end gap-2">
+            <div className="pointer-events-auto flex w-full items-start justify-end">
+              <div
+                className="inline-flex h-[27px] items-center rounded-[25px] px-[6px] shadow-[0.5px_1px_5px_rgba(0,0,0,0.1)]"
+                style={{ background: "#F6F6F2" }}
               >
-                Personal
-              </button>
-              <button
-                type="button"
-                onClick={() => onCanvasModeChange?.("team")}
-                className="inline-flex h-[22px] w-[60px] items-center justify-center rounded-[25px] transition"
-                style={{
-                  background: canvasMode === "team" ? "#7BA592" : "transparent",
-                  fontFamily: '"Pretendard Variable", "Instrument Sans", sans-serif',
-                  fontStyle: "normal",
-                  fontWeight: 700,
-                  fontSize: "10.3838px",
-                  lineHeight: "180%",
-                  color: canvasMode === "team" ? "#FFFFFF" : "#929B94",
-                }}
-              >
-                Team
-              </button>
+                <span
+                  className="mr-2 text-[10px] font-semibold text-[#929B94]"
+                  style={TOPBAR_META_TEXT_STYLE}
+                >
+                  AI mode
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleModeClick("research")}
+                  className="inline-flex h-[22px] w-[70px] items-center justify-center rounded-[25px] transition"
+                  style={{
+                    background: mode === "research" ? "#1F2937" : "transparent",
+                    fontFamily: '"Pretendard Variable", "Instrument Sans", sans-serif',
+                    fontStyle: "normal",
+                    fontWeight: 700,
+                    fontSize: "10.3838px",
+                    lineHeight: "180%",
+                    color: mode === "research" ? "#FFFFFF" : "#4B5563",
+                  }}
+                >
+                  Research
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleModeClick("design")}
+                  className="ml-[2px] inline-flex h-[22px] w-[64px] items-center justify-center rounded-[25px] transition"
+                  style={{
+                    background: mode === "design" ? "#1F2937" : "transparent",
+                    fontFamily: '"Pretendard Variable", "Instrument Sans", sans-serif',
+                    fontStyle: "normal",
+                    fontWeight: 700,
+                    fontSize: "10.3838px",
+                    lineHeight: "180%",
+                    color: mode === "design" ? "#FFFFFF" : "#4B5563",
+                  }}
+                >
+                  Design
+                </button>
+                <span className="mx-1 text-[10px] text-slate-400">·</span>
+                <button
+                  type="button"
+                  onClick={() => handleFlowClick("diverge")}
+                  className="inline-flex h-[22px] w-[72px] items-center justify-center rounded-[25px] transition"
+                  style={{
+                    background: flow === "diverge" ? "#2563EB" : "transparent",
+                    fontFamily: '"Pretendard Variable", "Instrument Sans", sans-serif',
+                    fontStyle: "normal",
+                    fontWeight: 700,
+                    fontSize: "10.3838px",
+                    lineHeight: "180%",
+                    color: flow === "diverge" ? "#FFFFFF" : "#4B5563",
+                  }}
+                >
+                  Diverge
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleFlowClick("converge")}
+                  className="ml-[2px] inline-flex h-[22px] w-[80px] items-center justify-center rounded-[25px] transition"
+                  style={{
+                    background: flow === "converge" ? "#2563EB" : "transparent",
+                    fontFamily: '"Pretendard Variable", "Instrument Sans", sans-serif',
+                    fontStyle: "normal",
+                    fontWeight: 700,
+                    fontSize: "10.3838px",
+                    lineHeight: "180%",
+                    color: flow === "converge" ? "#FFFFFF" : "#4B5563",
+                  }}
+                >
+                  Converge
+                </button>
+              </div>
             </div>
-          </div>
+
+            <div className="pointer-events-auto flex w-full items-start justify-end">
+              <div
+                className="inline-flex h-[27px] w-[130px] items-center rounded-[25px] px-[3px] shadow-[0.5px_1px_5px_rgba(0,0,0,0.1)]"
+                style={{ background: "#F6F6F2" }}
+              >
+                <button
+                  type="button"
+                  onClick={() => onCanvasModeChange?.("personal")}
+                  className="inline-flex h-[22px] w-[64px] items-center justify-center rounded-[25px] transition"
+                  style={{
+                    background: canvasMode === "personal" ? "#7BA592" : "transparent",
+                    fontFamily: '"Pretendard Variable", "Instrument Sans", sans-serif',
+                    fontStyle: "normal",
+                    fontWeight: 700,
+                    fontSize: "10.3838px",
+                    lineHeight: "180%",
+                    color: canvasMode === "personal" ? "#FFFFFF" : "#929B94",
+                  }}
+                >
+                  Personal
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onCanvasModeChange?.("team")}
+                  className="inline-flex h-[22px] w-[60px] items-center justify-center rounded-[25px] transition"
+                  style={{
+                    background: canvasMode === "team" ? "#7BA592" : "transparent",
+                    fontFamily: '"Pretendard Variable", "Instrument Sans", sans-serif',
+                    fontStyle: "normal",
+                    fontWeight: 700,
+                    fontSize: "10.3838px",
+                    lineHeight: "180%",
+                    color: canvasMode === "team" ? "#FFFFFF" : "#929B94",
+                  }}
+                >
+                  Team
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
