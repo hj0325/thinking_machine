@@ -11,7 +11,7 @@ export default function ContextMiniCard({ item, isActive, onSelect }) {
   return (
     <button
       type="button"
-      className={`relative min-w-0 ${isActive ? "col-span-2" : ""} rounded-2xl border p-2.5 text-left shadow-[0_8px_18px_rgba(0,0,0,0.08)] backdrop-blur-[10px] transition ${
+      className={`relative w-full min-w-0 overflow-hidden rounded-2xl border p-2.5 text-left shadow-[0_8px_18px_rgba(0,0,0,0.08)] backdrop-blur-[10px] transition ${
         isActive
           ? "border-teal-300 bg-white/72 ring-2 ring-teal-200"
           : "border-white/70 bg-white/50 hover:bg-white/60"
@@ -19,7 +19,7 @@ export default function ContextMiniCard({ item, isActive, onSelect }) {
       onClick={() => onSelect?.(item)}
       aria-label={`Select context card ${item?.title ?? ""}`}
     >
-      <div className="mb-1 flex items-center gap-1.5 pr-2">
+      <div className="mb-1 flex flex-wrap items-center gap-1.5 pr-2">
         <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${colors.tint} ${colors.text}`}>
           {normalized.category}
         </span>

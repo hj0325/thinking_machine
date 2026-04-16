@@ -60,6 +60,7 @@ export default function ThinkingMachine({
     const [isCanvasInteractive, setIsCanvasInteractive] = useState(true);
     const [selectedNodeId, setSelectedNodeId] = useState(null);
     const [pendingChatCandidateGraph, setPendingChatCandidateGraph] = useState(null);
+    const [hasStartedInput, setHasStartedInput] = useState(false);
 
     const { isAdminMode } = useAdminMode({
         storageKey: ADMIN_MODE_STORAGE_KEY,
@@ -68,7 +69,43 @@ export default function ThinkingMachine({
 
     // AI 제안 패널
     const [suggestions, setSuggestions] = useState([]);
+    const [dismissedSuggestionIds, setDismissedSuggestionIds] = useState(() => new Set());
     const [highlightedNodeIds, setHighlightedNodeIds] = useState(new Set());
+    const nodeContextSuggestions = useMemo(() => {
+        return [...nodes]
+            .filter((node) => node?.type === "thinkingNode" && node?.id)
+            .reverse()
+            .map((node) => ({
+                id: `node-context-${node.id}`,
+                nodeId: node.id,
+                _source: "node-context",
+                type: "attachedNodes",
+                title: node?.data?.title || "",
+                content: node?.data?.content || "",
+                category: node?.data?.category,
+                phase: node?.data?.phase,
+                sourceType: node?.data?.sourceType,
+                visibility: node?.data?.visibility,
+                confidence: node?.data?.confidence || "medium",
+                attached_nodes: [
+                    {
+                        id: node.id,
+                        title: node?.data?.title || "",
+                        content: node?.data?.content || "",
+                        category: node?.data?.category,
+                        phase: node?.data?.phase,
+                    },
+                ],
+            }));
+    }, [nodes]);
+    const drawerSuggestions = useMemo(() => {
+        const combined = [...suggestions, ...nodeContextSuggestions];
+        return combined.filter((item) => item?.id && !dismissedSuggestionIds.has(item.id));
+    }, [dismissedSuggestionIds, nodeContextSuggestions, suggestions]);
+    const unseenSuggestions = useMemo(
+        () => drawerSuggestions,
+        [drawerSuggestions]
+    );
 
     // Chat state (Drawer Chat primary + optional legacy dialog fallback)
     const [attachedNodes, setAttachedNodes] = useState([]); // [{id,title,content,category,phase,sourceType,visibility,confidence}]
@@ -87,7 +124,7 @@ export default function ThinkingMachine({
         handleDrawerChatConvertToNodes,
         handleDrawerContextSelect,
     } = useRightDrawerChat({
-        suggestions,
+        suggestions: unseenSuggestions,
         nodes,
         onPreviewNodesFromChat: handlePreviewNodesFromChat,
         isDrawerOpen,
@@ -101,6 +138,18 @@ export default function ThinkingMachine({
         handleDrawerModeToggle(nextMode);
         setIsDrawerOpen(true);
     }, [handleDrawerModeToggle]);
+
+    const handleDrawerSuggestionSelect = useCallback((item) => {
+        if (!item) return;
+        if (item?.id && item?._source !== "node-auto") {
+            setDismissedSuggestionIds((prev) => {
+                const next = new Set(prev);
+                next.add(item.id);
+                return next;
+            });
+        }
+        handleDrawerContextSelect(item);
+    }, [handleDrawerContextSelect]);
 
     const {
         selectedDraftIds,
@@ -394,7 +443,10 @@ export default function ThinkingMachine({
 
     useEffect(() => {
         if (selectedNodeId && !visibleCanvasNodeIds.has(selectedNodeId)) {
-            setSelectedNodeId(null);
+            const clearSelectionTimer = window.setTimeout(() => {
+                setSelectedNodeId((currentId) => (currentId === selectedNodeId ? null : currentId));
+            }, 0);
+            return () => window.clearTimeout(clearSelectionTimer);
         }
     }, [selectedNodeId, visibleCanvasNodeIds]);
 
@@ -428,9 +480,13 @@ export default function ThinkingMachine({
             ],
         };
 
-        setActiveSuggestion(autoSuggestion);
-        setDrawerMode("chat");
-        setIsDrawerOpen(true);
+        const syncDrawerTimer = window.setTimeout(() => {
+            setActiveSuggestion(autoSuggestion);
+            setDrawerMode("chat");
+            setIsDrawerOpen(true);
+        }, 0);
+
+        return () => window.clearTimeout(syncDrawerTimer);
     }, [activeSuggestion, selectedNode, setActiveSuggestion, setDrawerMode, setIsDrawerOpen]);
 
     const handlePromoteSelectedNode = useCallback(() => {
@@ -506,6 +562,7 @@ export default function ThinkingMachine({
     const handleRightDrawerSubmit = useCallback(async () => {
         const trimmedText = chatInput.trim();
         if (!trimmedText) return;
+        setHasStartedInput(true);
 
         if (!activeSuggestion && !isAnalyzing) {
             await handleInputSubmit({
@@ -604,17 +661,6 @@ export default function ThinkingMachine({
                     </>
                 )}
 
-                <LeftCanvasTools
-                    onAddPostit={createPostitDraft}
-                    onAddImage={createImageDraft}
-                    onZoomIn={handleZoomIn}
-                    onZoomOut={handleZoomOut}
-                    onFitView={handleFitCanvas}
-                    onToggleInteractive={handleToggleCanvasInteractive}
-                    isInteractive={isCanvasInteractive}
-                    uiLanguage="en"
-                />
-
                 {showDraftConvertPrompt && (
                     <div className="pointer-events-none absolute inset-x-0 top-20 z-[75] flex justify-center">
                         <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-white/70 bg-white/72 px-4 py-2 text-[12px] font-semibold text-slate-700 shadow-[0_12px_26px_rgba(0,0,0,0.14)] backdrop-blur-[12px]">
@@ -647,8 +693,9 @@ export default function ThinkingMachine({
                         <RightAgentDrawer
                             isOpen={isDrawerOpen}
                             mode={drawerMode}
-                            suggestions={suggestions}
-                            onToggleMode={handleDrawerModeChange}
+                            stage={normalizedStage}
+                            suggestions={unseenSuggestions}
+                            onStageChange={setStage}
                             activeSuggestion={activeSuggestion}
                             selectedNode={selectedNode}
                             linkedNodes={selectedNodeLinkedNodes}
@@ -661,7 +708,12 @@ export default function ThinkingMachine({
                             chatInput={chatInput}
                             isChatLoading={isAnalyzing || isChatLoading}
                             isChatConverting={isChatConverting}
-                            onChatInputChange={setChatInput}
+                            onChatInputChange={(value) => {
+                                if (String(value || "").trim().length > 0) {
+                                    setHasStartedInput(true);
+                                }
+                                setChatInput(value);
+                            }}
                             onChatSubmit={handleRightDrawerSubmit}
                             onChatConvertToNodes={handleDrawerChatConvertToNodes}
                             onCommitCandidateNodes={handleCommitCandidateNodes}
@@ -670,15 +722,20 @@ export default function ThinkingMachine({
                             onPromoteSelectedNode={handlePromoteSelectedNode}
                             onDemoteSelectedNode={handleDemoteSelectedNode}
                             onSetNodeVisibility={handleSetNodeVisibility}
-                            onChatContextSelect={handleDrawerContextSelect}
+                            onChatContextSelect={handleDrawerSuggestionSelect}
                             modeLabel={reasoningModeProfile.label}
                             candidateHint={reasoningModeProfile.candidateHint}
                             selectedNodeQuickActions={reasoningModeProfile.selectedNodeActions}
                             uiLanguage="en"
+                            canvasMode={canvasMode}
+                            onCanvasModeChange={setCanvasMode}
                             chatButtonRef={chatButtonRef}
                             chatDropZoneRef={chatDropZoneRef}
                             isChatDropActive={isChatDropActive}
                             onClearSelectedNode={handleClearSelectedNode}
+                            onAddPostit={createPostitDraft}
+                            onAddImage={createImageDraft}
+                            showDrawerHint={!hasStartedInput && !nodes.some((node) => node?.type === "thinkingNode")}
                         />
                     ) : null}
                 </AnimatePresence>

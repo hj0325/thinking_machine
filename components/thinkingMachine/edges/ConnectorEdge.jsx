@@ -239,6 +239,41 @@ function buildOrthogonalPoints(sourceX, sourceY, targetX, targetY, clearance, la
   return best;
 }
 
+function getLabelAnchor(points, sourceX, sourceY, targetX, targetY) {
+  const fallback = {
+    x: (sourceX + targetX) / 2,
+    y: (sourceY + targetY) / 2 - 18,
+  };
+  const pts = Array.isArray(points) ? points : [];
+  if (pts.length < 2) return fallback;
+
+  let longestHorizontal = null;
+  for (let i = 1; i < pts.length; i += 1) {
+    const prev = pts[i - 1];
+    const curr = pts[i];
+    const dy = curr.y - prev.y;
+    const dx = curr.x - prev.x;
+    if (dy !== 0) continue;
+    const width = Math.abs(dx);
+    if (!longestHorizontal || width > longestHorizontal.width) {
+      longestHorizontal = {
+        width,
+        x: (prev.x + curr.x) / 2,
+        y: curr.y,
+      };
+    }
+  }
+
+  if (longestHorizontal) {
+    return {
+      x: longestHorizontal.x,
+      y: longestHorizontal.y - 18,
+    };
+  }
+
+  return fallback;
+}
+
 export default function ConnectorEdge({
   id,
   sourceX,
@@ -265,8 +300,9 @@ export default function ConnectorEdge({
   const startPoint = points[0] ?? { x: sourceX, y: sy };
   const endPoint = points[points.length - 1] ?? { x: targetX, y: ty };
   const label = typeof data?.label === "string" ? data.label.replace(/_/g, " ") : "";
-  const labelX = (sourceX + targetX) / 2;
-  const labelY = (sy + ty) / 2;
+  const labelAnchor = getLabelAnchor(points, sourceX, sy, targetX, ty);
+  const labelX = labelAnchor.x;
+  const labelY = labelAnchor.y;
   const sourceTypeMeta = getTypeMeta(data?.sourceCategory);
   const isSelected = Boolean(selected);
   const underlayStroke = isSelected ? "rgba(255, 255, 255, 0.24)" : "rgba(255, 255, 255, 0.12)";

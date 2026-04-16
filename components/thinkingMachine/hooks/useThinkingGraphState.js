@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { normalizeOwnerId, normalizeRelationLabel, normalizeVisibility } from "@/lib/thinkingMachine/nodeMeta";
+import { NODE_CARD_TOKENS } from "@/lib/thinkingMachine/reactflowTransforms";
 
 const PERSONAL_VISIBILITY = new Set(["private", "candidate"]);
 const TEAM_VISIBILITY = new Set(["shared", "reviewed", "agreed"]);
@@ -73,6 +74,16 @@ export function useThinkingGraphState({ nodes, edges, selectedNodeId, canvasMode
         .filter((node) => visibleCanvasNodeIds.has(node.id))
         .map((node) => ({
           ...node,
+          ...(node?.type === "thinkingNode"
+            ? {
+                style: {
+                  ...(node.style || {}),
+                  width: NODE_CARD_TOKENS.width,
+                  minWidth: NODE_CARD_TOKENS.width,
+                  maxWidth: NODE_CARD_TOKENS.width,
+                },
+              }
+            : {}),
           className: [node.className || "", node.id === selectedNodeId ? "node-selected-focus" : ""]
             .filter(Boolean)
             .join(" "),
