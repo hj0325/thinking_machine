@@ -534,21 +534,51 @@ export default function RightAgentDrawer({
             {shouldShowContextPanel ? (
               <div
                 ref={contextScrollRef}
-                className={`grid ${isChat ? "grid-cols-1" : "grid-cols-2"} shrink-0 gap-2 overflow-y-auto overflow-x-visible pl-0.5 pr-2 pb-3`}
-                style={{ maxHeight: "24%", paddingTop: DRAWER_TOP_SAFE_ZONE, scrollbarWidth: "none" }}
+                className={`shrink-0 overflow-y-auto overflow-x-visible pl-0.5 pr-2 pb-3`}
+                style={{ maxHeight: "26%", paddingTop: DRAWER_TOP_SAFE_ZONE, scrollbarWidth: "none" }}
               >
-                {contextItems.length > 0 ? (
-                  contextItems.map((item) => (
-                    <ContextMiniCard
-                      key={item.id}
-                      item={item}
-                      isActive={activeSuggestion?.id === item.id}
-                      onSelect={onChatContextSelect}
-                    />
-                  ))
+                <div className="mb-2 flex items-center justify-between px-0.5">
+                  <div className="inline-flex rounded-full bg-white/80 p-1 text-[11px] font-semibold text-slate-600 shadow-sm">
+                    <button
+                      type="button"
+                      onClick={() => onToggleMode?.("tip")}
+                      className={`rounded-full px-3 py-0.5 transition ${
+                        isTip ? "bg-slate-900 text-white shadow-sm" : "text-slate-500 hover:bg-slate-100"
+                      }`}
+                    >
+                      {copy.suggestionsTab}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onToggleMode?.("chat")}
+                      className={`rounded-full px-3 py-0.5 transition ${
+                        isChat ? "bg-slate-900 text-white shadow-sm" : "text-slate-500 hover:bg-slate-100"
+                      }`}
+                    >
+                      {copy.workspaceTab}
+                    </button>
+                  </div>
+                </div>
+                {isTip ? (
+                  <div className={`grid grid-cols-2 gap-2`}>
+                    {contextItems.length > 0 ? (
+                      contextItems.map((item) => (
+                        <ContextMiniCard
+                          key={item.id}
+                          item={item}
+                          isActive={activeSuggestion?.id === item.id}
+                          onSelect={onChatContextSelect}
+                        />
+                      ))
+                    ) : (
+                      <div className="col-span-2 rounded-2xl border border-dashed border-white/75 bg-white/42 px-3 py-2 text-[11px] text-slate-600 backdrop-blur-[8px]">
+                        {copy.emptySuggestions}
+                      </div>
+                    )}
+                  </div>
                 ) : (
-                  <div className="col-span-2 rounded-2xl border border-dashed border-white/75 bg-white/42 px-3 py-2 text-[11px] text-slate-600 backdrop-blur-[8px]">
-                    {copy.emptySuggestions}
+                  <div className="rounded-2xl border border-dashed border-white/75 bg-white/42 px-3 py-2 text-[11px] text-slate-600 backdrop-blur-[8px]">
+                    {copy.emptyChat}
                   </div>
                 )}
               </div>

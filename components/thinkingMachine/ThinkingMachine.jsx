@@ -106,7 +106,7 @@ export default function ThinkingMachine({
     const [edges, setEdges, onEdgesChange] = useEdgesState(INITIAL_EDGES);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [isDrawerOpen, setIsDrawerOpen] = useState(true);
-    const [drawerMode, setDrawerMode] = useState("chat");
+    const [drawerMode, setDrawerMode] = useState("tip");
     const [stage, setStage] = useState("research-diverge");
     const [projectTitle, setProjectTitle] = useState(initialProjectTitle);
     const [canvasMode, setCanvasMode] = useState("personal");
@@ -139,6 +139,7 @@ export default function ThinkingMachine({
         isChatLoading,
         isChatConverting,
         handleDrawerModeToggle,
+        handleDrawerChatSubmit,
         handleDrawerChatConvertToNodes,
         handleDrawerContextSelect,
     } = useDrawerChat({
@@ -204,7 +205,13 @@ export default function ThinkingMachine({
     });
 
     const hasThinkingGraph = useMemo(() => {
-        return nodes.some((n) => n?.type === "thinkingNode" || n?.type === "ideaGroup");
+        // 그래프가 없더라도 포스트잇/이미지 초안만 있어도 캔버스를 보여주기 위해 드래프트 타입도 포함
+        return nodes.some((n) =>
+            n?.type === "thinkingNode" ||
+            n?.type === "ideaGroup" ||
+            n?.type === "postitDraft" ||
+            n?.type === "imageDraft"
+        );
     }, [nodes]);
     const currentRoleMeta = getRoleMeta(MOCK_CURRENT_USER_ROLE);
 
@@ -345,42 +352,52 @@ export default function ThinkingMachine({
     function handlePreviewNodesFromChat(data) {
         const incoming = Array.isArray(data?.nodes) ? data.nodes : [];
         const incomingEdges = Array.isArray(data?.edges) ? data.edges : [];
-        const candidateNodes = incoming.map((n) => ({
-            ...n,
-            data: {
-                ...n.data,
-                ownerId: MOCK_CURRENT_USER_ID,
-                editedBy: "You",
-                visibility: "candidate",
+        if (!incoming.length) return;
+
+        // 대화 결과를 별도 후보 카드 없이 바로 그래프에 반영
+        handleAddNodesFromChat(
+            {
+                nodes: incoming.map((n) => ({
+                    ...n,
+                    data: {
+                        ...n.data,
+                        ownerId: MOCK_CURRENT_USER_ID,
+                        editedBy: "You",
+                        visibility: "candidate",
+                    },
+                })),
+                edges: incomingEdges.map((e) => ({
+                    ...e,
+                    label: normalizeRelationLabel(e?.label),
+                })),
             },
-        }));
-        const candidateEdges = incomingEdges.map((e) => ({
-            ...e,
-            label: normalizeRelationLabel(e?.label),
-        }));
-        setPendingChatCandidateGraph({
-            nodes: candidateNodes,
-            edges: candidateEdges,
-        });
-        setDrawerMode("chat");
-        setIsDrawerOpen(true);
+            { commitVisibility: "candidate" }
+        );
+
+        // 대화 기반 노드 생성 후에는 다시 입력 모드로 되돌아가도록 컨텍스트 초기화
+        setActiveSuggestion(null);
+        setPendingChatCandidateGraph(null);
     }
 
     const handleCommitCandidateNodes = useCallback(() => {
         if (!pendingChatCandidateGraph) return;
         handleAddNodesFromChat(pendingChatCandidateGraph, { commitVisibility: "candidate" });
         setPendingChatCandidateGraph(null);
-    }, [handleAddNodesFromChat, pendingChatCandidateGraph]);
+        // 대화 기반 후보 노드를 그래프에 반영한 뒤에는 다시 기본 입력 모드로 돌아가도록 컨텍스트 초기화
+        setActiveSuggestion(null);
+    }, [handleAddNodesFromChat, pendingChatCandidateGraph, setActiveSuggestion]);
 
     const handleCommitCandidateNodesAsPrivate = useCallback(() => {
         if (!pendingChatCandidateGraph) return;
         handleAddNodesFromChat(pendingChatCandidateGraph, { commitVisibility: "private" });
         setPendingChatCandidateGraph(null);
-    }, [handleAddNodesFromChat, pendingChatCandidateGraph]);
+        setActiveSuggestion(null);
+    }, [handleAddNodesFromChat, pendingChatCandidateGraph, setActiveSuggestion]);
 
     const handleDiscardCandidateNodes = useCallback(() => {
         setPendingChatCandidateGraph(null);
-    }, []);
+        setActiveSuggestion(null);
+    }, [setActiveSuggestion]);
 
     const syncVisibilityChangeMock = useCallback((nodeId, nextVisibility) => {
         void nodeId;
@@ -693,7 +710,7 @@ export default function ThinkingMachine({
             setNodes(relaidNodes);
             setEdges(nextEdges);
             animateViewportToNodes(relaidViewportTargets.length ? relaidViewportTargets : viewportTargets);
-            setDrawerMode("chat");
+            setDrawerMode("tip");
             setIsDrawerOpen(true);
             userNodeDatas.forEach((node) => {
                 recordProjectActivity("node_created", {
@@ -721,16 +738,24 @@ export default function ThinkingMachine({
         }
     }, [animateViewportToNodes, edges, highlightedNodeIds, nodes, projectTitle, recordProjectActivity, setEdges, setNodes, stage]);
 
-    const handleDrawerNodeSubmit = useCallback(async () => {
+    // 우측 Drawer 하단 입력창 동작:
+    // - 기본(컨텍스트 없음)일 때: 사용자 입력을 기반으로 /api/analyze 를 호출해 새 노드 + 제안 생성
+    // - 제안 카드/attachedNodes 컨텍스트가 있을 때: 해당 컨텍스트를 anchor 로 /api/chat 경로를 사용
+    const handleRightDrawerSubmit = useCallback(async () => {
         const trimmedText = chatInput.trim();
-        if (!trimmedText || isAnalyzing) return;
+        if (!trimmedText) return;
 
-        await handleInputSubmit({
-            text: trimmedText,
-            selectedNode,
-        });
-        setChatInput("");
-    }, [chatInput, handleInputSubmit, isAnalyzing, selectedNode, setChatInput]);
+        if (!activeSuggestion && !isAnalyzing) {
+            await handleInputSubmit({
+                text: trimmedText,
+                selectedNode,
+            });
+            setChatInput("");
+            return;
+        }
+
+        await handleDrawerChatSubmit();
+    }, [activeSuggestion, chatInput, handleDrawerChatSubmit, handleInputSubmit, isAnalyzing, selectedNode, setChatInput]);
 
     return (
         <div className="w-full h-screen relative flex flex-col overflow-hidden bg-slate-50">
@@ -817,6 +842,17 @@ export default function ThinkingMachine({
                     </>
                 )}
 
+                <LeftCanvasTools
+                    onAddPostit={createPostitDraft}
+                    onAddImage={createImageDraft}
+                    onZoomIn={handleZoomIn}
+                    onZoomOut={handleZoomOut}
+                    onFitView={handleFitCanvas}
+                    onToggleInteractive={handleToggleCanvasInteractive}
+                    isInteractive={isCanvasInteractive}
+                    uiLanguage="en"
+                />
+
                 {showDraftConvertPrompt && (
                     <div className="pointer-events-none absolute inset-x-0 top-20 z-[75] flex justify-center">
                         <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-white/70 bg-white/72 px-4 py-2 text-[12px] font-semibold text-slate-700 shadow-[0_12px_26px_rgba(0,0,0,0.14)] backdrop-blur-[12px]">
@@ -864,7 +900,7 @@ export default function ThinkingMachine({
                             isChatLoading={isAnalyzing || isChatLoading}
                             isChatConverting={isChatConverting}
                             onChatInputChange={setChatInput}
-                            onChatSubmit={handleDrawerNodeSubmit}
+                            onChatSubmit={handleRightDrawerSubmit}
                             onChatConvertToNodes={handleDrawerChatConvertToNodes}
                             onCommitCandidateNodes={handleCommitCandidateNodes}
                             onCommitCandidateNodesAsPrivate={handleCommitCandidateNodesAsPrivate}
