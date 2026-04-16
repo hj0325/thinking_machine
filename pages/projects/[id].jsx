@@ -1,28 +1,17 @@
-import Link from "next/link";
 import { useRouter } from "next/router";
 import { startTransition, useEffect, useState } from "react";
 import ThinkingMachine from "@/components/thinkingMachine/ThinkingMachine";
+import { fetchProject } from "@/lib/thinkingMachine/apiClient";
+import { readCurrentUser } from "@/lib/thinkingMachine/clientUser";
 
 const LOGIN_STORAGE_KEY = "isLoggedIn";
-const PROJECTS_STORAGE_KEY = "thinking-machine-projects";
-
-function readProjects() {
-  if (typeof window === "undefined") return [];
-
-  try {
-    const raw = window.localStorage.getItem(PROJECTS_STORAGE_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
 
 export default function ProjectWorkspacePage() {
   const router = useRouter();
   const { id } = router.query;
   const [isLoading, setIsLoading] = useState(true);
   const [project, setProject] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
 
   useEffect(() => {
     if (!router.isReady) return;
@@ -33,18 +22,25 @@ export default function ProjectWorkspacePage() {
       return;
     }
 
-    const projects = readProjects();
-    const matchedProject = projects.find((item) => item?.id === id) || null;
+    const run = async () => {
+      try {
+        const matchedProject = await fetchProject(id);
 
-    if (!matchedProject) {
-      void router.replace("/projects");
-      return;
-    }
+        if (!matchedProject) {
+          void router.replace("/projects");
+          return;
+        }
 
-    startTransition(() => {
-      setProject(matchedProject);
-      setIsLoading(false);
-    });
+        startTransition(() => {
+          setProject(matchedProject);
+          setCurrentUser(readCurrentUser());
+          setIsLoading(false);
+        });
+      } catch {
+        void router.replace("/projects");
+      }
+    };
+    void run();
   }, [id, router, router.isReady]);
 
   if (isLoading) {
@@ -64,6 +60,7 @@ export default function ProjectWorkspacePage() {
         initialProjectTitle={project?.title || "Untitled Project"}
         projectMetaHref="/projects"
         projectMetaLabel="Back to projects"
+        currentUser={currentUser}
       />
     </main>
   );

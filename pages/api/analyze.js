@@ -33,7 +33,6 @@ export default async function handler(req, res) {
 
     return res.status(200).json(result);
   } catch (e) {
-    // eslint-disable-next-line no-console
     console.error(e);
     const msg =
       e?.name === "ZodError"

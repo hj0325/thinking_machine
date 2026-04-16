@@ -1,98 +1,108 @@
-import { startTransition, useCallback, useEffect, useState } from "react";
-
-const PROJECTS_STORAGE_KEY = "thinking-machine-projects";
-const MAX_ACTIVITY_ITEMS = 24;
-
-function getActivityStorageKey(projectId) {
-  return `thinking-machine-activity-${projectId}`;
-}
-
-function readProjectsFromStorage() {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(PROJECTS_STORAGE_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeProjectsToStorage(projects) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(PROJECTS_STORAGE_KEY, JSON.stringify(projects));
-}
-
-function readActivityLog(projectId) {
-  if (typeof window === "undefined" || !projectId) return [];
-  try {
-    const raw = window.localStorage.getItem(getActivityStorageKey(projectId));
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeActivityLog(projectId, entries) {
-  if (typeof window === "undefined" || !projectId) return;
-  window.localStorage.setItem(getActivityStorageKey(projectId), JSON.stringify(entries.slice(0, MAX_ACTIVITY_ITEMS)));
-}
+import { startTransition, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  fetchProject,
+  fetchProjectActivity,
+  fetchProjectMembers,
+  recordProjectActivity as postProjectActivity,
+  registerProjectMember,
+} from "@/lib/thinkingMachine/apiClient";
 
 export function useThinkingCollaboration({
   projectId,
   currentUserId,
-  currentUserRole,
+  currentUserRole = "editor",
+  currentUserName = "You",
+  currentUserEmail = "",
+  currentUserPicture = "",
   autoRefreshMs = 15000,
 } = {}) {
   const [projectLastUpdated, setProjectLastUpdated] = useState(null);
   const [activityLog, setActivityLog] = useState([]);
+  const [teamMembers, setTeamMembers] = useState([]);
   const [lastRefreshedAt, setLastRefreshedAt] = useState(null);
 
-  const refreshProjectCollaborationMeta = useCallback(() => {
-    if (!projectId || typeof window === "undefined") return;
-    const projects = readProjectsFromStorage();
-    const matchedProject = projects.find((item) => item?.id === projectId) || null;
-    const nextActivity = readActivityLog(projectId);
-    startTransition(() => {
-      setProjectLastUpdated(matchedProject?.updatedAt || null);
-      setActivityLog(nextActivity);
-      setLastRefreshedAt(new Date().toISOString());
-    });
+  const actor = useMemo(
+    () => ({
+      id: currentUserId,
+      name: currentUserName,
+      email: currentUserEmail,
+      picture: currentUserPicture,
+      role: currentUserRole,
+    }),
+    [currentUserEmail, currentUserId, currentUserName, currentUserPicture, currentUserRole]
+  );
+
+  const refreshProjectCollaborationMeta = useCallback(async () => {
+    if (!projectId) return;
+    try {
+      const [project, nextActivity, nextMembers] = await Promise.all([
+        fetchProject(projectId),
+        fetchProjectActivity(projectId),
+        fetchProjectMembers(projectId),
+      ]);
+      startTransition(() => {
+        setProjectLastUpdated(project?.updatedAt || null);
+        setActivityLog(Array.isArray(nextActivity) ? nextActivity : []);
+        setTeamMembers(Array.isArray(nextMembers) ? nextMembers : []);
+        setLastRefreshedAt(new Date().toISOString());
+      });
+    } catch {
+      startTransition(() => {
+        setLastRefreshedAt(new Date().toISOString());
+      });
+    }
   }, [projectId]);
 
   const recordProjectActivity = useCallback(
-    (actionType, payload = {}) => {
-      if (!projectId || typeof window === "undefined") return;
-      const timestamp = new Date().toISOString();
-      const nextProjects = readProjectsFromStorage().map((project) =>
-        project?.id === projectId ? { ...project, updatedAt: timestamp } : project
-      );
-      writeProjectsToStorage(nextProjects);
-
-      const nextEntry = {
-        id: `${actionType}-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`,
-        type: actionType,
-        timestamp,
-        userId: currentUserId,
-        userRole: currentUserRole,
+    async (actionType, payload = {}) => {
+      if (!projectId || !currentUserId) return null;
+      const entry = await postProjectActivity(projectId, {
+        actionType,
+        actor,
         ...payload,
-      };
-      const nextActivity = [nextEntry, ...readActivityLog(projectId)].slice(0, MAX_ACTIVITY_ITEMS);
-      writeActivityLog(projectId, nextActivity);
-      refreshProjectCollaborationMeta();
+      });
+      await refreshProjectCollaborationMeta();
+      return entry;
     },
-    [currentUserId, currentUserRole, projectId, refreshProjectCollaborationMeta]
+    [actor, currentUserId, projectId, refreshProjectCollaborationMeta]
+  );
+
+  const registerCurrentUser = useCallback(async () => {
+    if (!projectId || !currentUserId) return [];
+    const members = await registerProjectMember(projectId, actor);
+    startTransition(() => {
+      setTeamMembers(Array.isArray(members) ? members : []);
+      setLastRefreshedAt(new Date().toISOString());
+    });
+    return members;
+  }, [actor, currentUserId, projectId]);
+
+  const currentMember = useMemo(
+    () => teamMembers.find((member) => member?.id === currentUserId) || null,
+    [currentUserId, teamMembers]
   );
 
   useEffect(() => {
-    refreshProjectCollaborationMeta();
-  }, [refreshProjectCollaborationMeta]);
+    let cancelled = false;
+    const run = async () => {
+      if (!projectId || !currentUserId) return;
+      try {
+        await registerCurrentUser();
+        if (!cancelled) await refreshProjectCollaborationMeta();
+      } catch {
+        if (!cancelled) setLastRefreshedAt(new Date().toISOString());
+      }
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUserId, projectId, refreshProjectCollaborationMeta, registerCurrentUser]);
 
   useEffect(() => {
     if (!projectId) return undefined;
     const intervalId = window.setInterval(() => {
-      refreshProjectCollaborationMeta();
+      void refreshProjectCollaborationMeta();
     }, autoRefreshMs);
     return () => window.clearInterval(intervalId);
   }, [autoRefreshMs, projectId, refreshProjectCollaborationMeta]);
@@ -100,9 +110,13 @@ export function useThinkingCollaboration({
   return {
     projectLastUpdated,
     activityLog,
+    teamMembers,
+    currentMember,
+    currentUserRole: currentMember?.role || currentUserRole,
     lastRefreshedAt,
     refreshProjectCollaborationMeta,
     recordProjectActivity,
+    registerCurrentUser,
   };
 }
 

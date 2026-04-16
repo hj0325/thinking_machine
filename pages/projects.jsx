@@ -1,24 +1,9 @@
 import { startTransition, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
+import { createProject as createProjectRequest, fetchProjects } from "@/lib/thinkingMachine/apiClient";
+import { readCurrentUser } from "@/lib/thinkingMachine/clientUser";
 
 const LOGIN_STORAGE_KEY = "isLoggedIn";
-const PROJECTS_STORAGE_KEY = "thinking-machine-projects";
-
-function readProjects() {
-  if (typeof window === "undefined") return [];
-
-  try {
-    const raw = window.localStorage.getItem(PROJECTS_STORAGE_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeProjects(projects) {
-  window.localStorage.setItem(PROJECTS_STORAGE_KEY, JSON.stringify(projects));
-}
 
 function formatDate(value) {
   if (!value) return "Just now";
@@ -33,17 +18,9 @@ function formatDate(value) {
   }).format(date);
 }
 
-function createProject() {
-  const timestamp = new Date().toISOString();
-  const id =
-    typeof crypto !== "undefined" && crypto.randomUUID
-      ? crypto.randomUUID()
-      : `project-${Date.now()}`;
-
+function createProjectDraft() {
   return {
-    id,
     title: "Untitled Project",
-    updatedAt: timestamp,
   };
 }
 
@@ -60,10 +37,21 @@ export default function ProjectsPage() {
       return;
     }
 
-    startTransition(() => {
-      setProjects(readProjects());
-      setIsLoading(false);
-    });
+    const run = async () => {
+      try {
+        const nextProjects = await fetchProjects();
+        startTransition(() => {
+          setProjects(nextProjects);
+          setIsLoading(false);
+        });
+      } catch {
+        startTransition(() => {
+          setProjects([]);
+          setIsLoading(false);
+        });
+      }
+    };
+    void run();
   }, [router]);
 
   const sortedProjects = useMemo(() => {
@@ -74,11 +62,17 @@ export default function ProjectsPage() {
     });
   }, [projects]);
 
-  const handleCreateProject = () => {
-    const nextProject = createProject();
-    const nextProjects = [nextProject, ...projects];
-    setProjects(nextProjects);
-    writeProjects(nextProjects);
+  const handleCreateProject = async () => {
+    const draftProject = createProjectDraft();
+    const currentUser = readCurrentUser();
+    const nextProject = await createProjectRequest({
+      title: draftProject.title,
+      actor: {
+        ...currentUser,
+        role: "owner",
+      },
+    });
+    setProjects((prev) => [nextProject, ...prev]);
     void router.push(`/projects/${nextProject.id}`);
   };
 

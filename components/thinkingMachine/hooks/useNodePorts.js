@@ -43,6 +43,11 @@ export function useNodePorts({ nodes, edges, highlightedNodeIds, draftHandlers, 
               isSubmitting: Boolean(draftSubmittingIds?.has?.(n.id)),
             }
           : {}),
+        ...(n.type === "ideaGroup"
+          ? {
+              onToggle: draftHandlers?.onToggleIdeaGroup,
+            }
+          : {}),
       },
       className: [n.className || "", hasHighlightSet && highlightedNodeIds.has(n.id) ? "node-highlighted" : ""]
         .filter(Boolean)

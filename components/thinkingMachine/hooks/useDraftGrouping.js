@@ -36,6 +36,8 @@ export function useDraftGrouping({
   setSuggestions,
   reactFlowRef,
   stage = "research-diverge",
+  currentUserId = "mock-user-1",
+  currentUserName = "You",
 } = {}) {
   const [selectedDraftIds, setSelectedDraftIds] = useState([]);
   const [showDraftConvertPrompt, setShowDraftConvertPrompt] = useState(false);
@@ -270,8 +272,8 @@ export function useDraftGrouping({
             ...n,
             data: {
               ...n.data,
-              ownerId: "mock-user-1",
-              editedBy: "You",
+              ownerId: currentUserId,
+              editedBy: currentUserName,
               visibility: "private",
             },
           }));
@@ -410,7 +412,7 @@ export function useDraftGrouping({
         });
       }
     },
-    [edges, isAnalyzing, nodes, setEdges, setIsAnalyzing, setNodes, setSuggestions, stage, toggleIdeaGroupMode]
+    [currentUserId, currentUserName, edges, isAnalyzing, nodes, setEdges, setIsAnalyzing, setNodes, setSuggestions, stage, toggleIdeaGroupMode]
   );
 
   // Keep a ref to the latest converter so draft nodes never call stale closures.
@@ -437,5 +439,6 @@ export function useDraftGrouping({
     handleDraftSubmit,
     handleSelectionChange,
     convertDraftsToGroup,
+    toggleIdeaGroupMode,
   };
 }

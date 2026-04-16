@@ -1,5 +1,5 @@
-import { createThinkingAgent } from "../../lib/thinkingAgent";
-import { getServerEnv } from "../../lib/serverEnv";
+import { createThinkingAgent } from "@/lib/thinkingAgent";
+import { getServerEnv } from "@/lib/serverEnv";
 
 let cachedAgent = null;
 
@@ -20,15 +20,10 @@ export default async function handler(req, res) {
   if (error) return res.status(500).json({ error });
 
   try {
-    const result = await agent.chatToNodes(req.body ?? {});
-    return res.status(200).json(result);
+    const summary = await agent.summarizeTeamContext(req.body || {});
+    return res.status(200).json(summary);
   } catch (e) {
     console.error(e);
-    const msg =
-      e?.name === "ZodError"
-        ? `Invalid AI response format: ${e?.issues ? e.issues.map((i) => `${(i.path || []).join(".")}:${i.message}`).slice(0, 6).join(" | ") : "unknown"}`
-        : String(e?.message ?? e);
-    return res.status(500).json({ error: msg });
+    return res.status(500).json({ error: String(e?.message ?? e) });
   }
 }
-

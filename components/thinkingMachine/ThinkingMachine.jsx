@@ -8,7 +8,7 @@ import {
 } from "reactflow";
 import { AnimatePresence, motion } from "framer-motion";
 import NodeMap from "./NodeMap";
-import LeftCanvasTools from "./LeftCanvasTools";
+import LeftTeamContextPanel from "./LeftTeamContextPanel";
 import RightAgentDrawer from "./RightAgentDrawer";
 import TopBar from "./TopBar";
 import { toConnectorEdges } from "@/lib/thinkingMachine/connectorEdges";
@@ -21,6 +21,9 @@ import { useThinkingCollaboration } from "@/components/thinkingMachine/hooks/use
 import { useThinkingGraphState } from "@/components/thinkingMachine/hooks/useThinkingGraphState";
 import { useThinkingAiAnalyze } from "@/components/thinkingMachine/hooks/useThinkingAiAnalyze";
 import { useRightDrawerChat } from "@/components/thinkingMachine/hooks/useRightDrawerChat";
+import { fetchProjectGraph, saveProjectGraph, summarizeTeamContext, updateProject } from "@/lib/thinkingMachine/apiClient";
+import { hydrateProjectEdges, hydrateProjectNodes, serializeProjectGraph } from "@/lib/thinkingMachine/projectGraph";
+import { readCurrentUser } from "@/lib/thinkingMachine/clientUser";
 import {
     getReasoningModeProfile,
     getRoleMeta,
@@ -43,11 +46,36 @@ function cubicOut(t) {
     return 1 - Math.pow(1 - t, 3);
 }
 
+function getNodeSnapshot(node, edges = []) {
+    if (!node) return null;
+    const linkedNodeIds = (Array.isArray(edges) ? edges : [])
+        .filter((edge) => edge?.source === node.id || edge?.target === node.id)
+        .map((edge) => (edge.source === node.id ? edge.target : edge.source))
+        .filter(Boolean);
+    return {
+        id: node.id,
+        title: node?.data?.title || "",
+        content: node?.data?.content || "",
+        category: node?.data?.category || "",
+        phase: node?.data?.phase || "",
+        visibility: normalizeVisibility(node?.data?.visibility),
+        linkedNodeIds,
+    };
+}
+
+function getRelatedNodeIds(nodeId, edges = []) {
+    return (Array.isArray(edges) ? edges : [])
+        .filter((edge) => edge?.source === nodeId || edge?.target === nodeId)
+        .map((edge) => (edge.source === nodeId ? edge.target : edge.source))
+        .filter(Boolean);
+}
+
 export default function ThinkingMachine({
     projectId = "",
     initialProjectTitle = "Thinking Machine",
     projectMetaHref = "/projects",
     projectMetaLabel = "Back to projects",
+    currentUser: initialCurrentUser = null,
 }) {
     const [nodes, setNodes, baseOnNodesChange] = useNodesState(INITIAL_NODES);
     const [edges, setEdges, onEdgesChange] = useEdgesState(INITIAL_EDGES);
@@ -61,11 +89,37 @@ export default function ThinkingMachine({
     const [selectedNodeId, setSelectedNodeId] = useState(null);
     const [pendingChatCandidateGraph, setPendingChatCandidateGraph] = useState(null);
     const [hasStartedInput, setHasStartedInput] = useState(false);
+    const [currentUser, setCurrentUser] = useState(initialCurrentUser || null);
+    const [isGraphHydrating, setIsGraphHydrating] = useState(true);
+    const [selectedTeamMemberId, setSelectedTeamMemberId] = useState(null);
+    const [selectedActivityEventId, setSelectedActivityEventId] = useState(null);
+    const [teamContextSummary, setTeamContextSummary] = useState(null);
+    const [isTeamContextLoading, setIsTeamContextLoading] = useState(false);
+    const [teamContextError, setTeamContextError] = useState("");
+    const [isTeamContextPanelOpen, setIsTeamContextPanelOpen] = useState(false);
+    const lastSavedGraphRef = useRef("");
+    const lastSyncedTitleRef = useRef(initialProjectTitle);
 
     const { isAdminMode } = useAdminMode({
         storageKey: ADMIN_MODE_STORAGE_KEY,
         hintDismissedKey: ADMIN_HINT_DISMISSED_KEY,
     });
+
+    useEffect(() => {
+        if (initialCurrentUser) {
+            setCurrentUser(initialCurrentUser);
+            return;
+        }
+        if (typeof window !== "undefined") {
+            setCurrentUser(readCurrentUser());
+        }
+    }, [initialCurrentUser]);
+
+    const currentUserId = currentUser?.id || MOCK_CURRENT_USER_ID;
+    const currentUserName = currentUser?.name || "You";
+    const currentUserRole = currentUser?.role || MOCK_CURRENT_USER_ROLE;
+    const currentUserEmail = currentUser?.email || "";
+    const currentUserPicture = currentUser?.picture || "";
 
     // AI 제안 패널
     const [suggestions, setSuggestions] = useState([]);
@@ -108,7 +162,7 @@ export default function ThinkingMachine({
     );
 
     // Chat state (Drawer Chat primary + optional legacy dialog fallback)
-    const [attachedNodes, setAttachedNodes] = useState([]); // [{id,title,content,category,phase,sourceType,visibility,confidence}]
+    const [, setAttachedNodes] = useState([]); // [{id,title,content,category,phase,sourceType,visibility,confidence}]
     const reactFlowRef = useRef(null);
 
     const {
@@ -166,6 +220,7 @@ export default function ThinkingMachine({
         handleDraftSubmit,
         handleSelectionChange,
         convertDraftsToGroup,
+        toggleIdeaGroupMode,
     } = useDraftGrouping({
         nodes,
         edges,
@@ -176,6 +231,8 @@ export default function ThinkingMachine({
         setSuggestions,
         reactFlowRef,
         stage,
+        currentUserId,
+        currentUserName,
     });
 
     const {
@@ -197,38 +254,29 @@ export default function ThinkingMachine({
         setIsDrawerOpen,
     });
 
-    const currentRoleMeta = getRoleMeta(MOCK_CURRENT_USER_ROLE);
-
     const {
         projectLastUpdated,
         activityLog,
+        teamMembers,
+        currentMember,
         lastRefreshedAt,
         recordProjectActivity,
+        refreshProjectCollaborationMeta,
     } = useThinkingCollaboration({
         projectId,
-        currentUserId: MOCK_CURRENT_USER_ID,
-        currentUserRole: MOCK_CURRENT_USER_ROLE,
+        currentUserId,
+        currentUserRole,
+        currentUserName,
+        currentUserEmail,
+        currentUserPicture,
     });
+    const effectiveCurrentUserRole = currentMember?.role || currentUserRole;
+    const currentRoleMeta = getRoleMeta(effectiveCurrentUserRole);
+    const normalizedStage = useMemo(() => normalizeReasoningStage(stage), [stage]);
 
     const handleFlowInit = (instance) => {
         reactFlowRef.current = instance;
     };
-
-    const handleZoomIn = useCallback(() => {
-        reactFlowRef.current?.zoomIn?.({ duration: 220 });
-    }, []);
-
-    const handleZoomOut = useCallback(() => {
-        reactFlowRef.current?.zoomOut?.({ duration: 220 });
-    }, []);
-
-    const handleFitCanvas = useCallback(() => {
-        reactFlowRef.current?.fitView?.({ duration: 320, padding: 0.18, maxZoom: 1 });
-    }, []);
-
-    const handleToggleCanvasInteractive = useCallback(() => {
-        setIsCanvasInteractive((prev) => !prev);
-    }, []);
 
     const animateViewportToNodes = useCallback((targetNodes) => {
         const inst = reactFlowRef?.current;
@@ -261,6 +309,130 @@ export default function ThinkingMachine({
         }
     }, []);
 
+    useEffect(() => {
+        let cancelled = false;
+        const hydrateGraph = async () => {
+            if (!projectId) {
+                setIsGraphHydrating(false);
+                return;
+            }
+            try {
+                const payload = await fetchProjectGraph(projectId);
+                if (cancelled) return;
+                const hydratedNodes = hydrateProjectNodes(payload?.graph?.nodes || []);
+                const hydratedEdges = hydrateProjectEdges(payload?.graph?.edges || []);
+                const nextStage = payload?.graph?.stage || "research-diverge";
+                setNodes(hydratedNodes);
+                setEdges(hydratedEdges);
+                setStage(nextStage);
+                if (payload?.project?.title) {
+                    setProjectTitle(payload.project.title);
+                    lastSyncedTitleRef.current = payload.project.title;
+                }
+                setHasStartedInput(hydratedNodes.some((node) => node?.type === "thinkingNode"));
+                lastSavedGraphRef.current = JSON.stringify(
+                    serializeProjectGraph(hydratedNodes, hydratedEdges, nextStage)
+                );
+            } catch (error) {
+                console.error("Failed to hydrate project graph:", error);
+            } finally {
+                if (!cancelled) setIsGraphHydrating(false);
+            }
+        };
+        void hydrateGraph();
+        return () => {
+            cancelled = true;
+        };
+    }, [projectId, setEdges, setNodes]);
+
+    useEffect(() => {
+        if (!projectId || !currentUserId || isGraphHydrating) return undefined;
+        const timeoutId = window.setTimeout(async () => {
+            const serialized = serializeProjectGraph(nodes, edges, normalizedStage);
+            const nextKey = JSON.stringify(serialized);
+            if (nextKey === lastSavedGraphRef.current) return;
+            try {
+                await saveProjectGraph(projectId, {
+                    ...serialized,
+                    actor: {
+                        id: currentUserId,
+                        name: currentUserName,
+                        email: currentUserEmail,
+                        picture: currentUserPicture,
+                        role: effectiveCurrentUserRole,
+                    },
+                });
+                lastSavedGraphRef.current = nextKey;
+            } catch (error) {
+                console.error("Failed to persist graph:", error);
+            }
+        }, 450);
+        return () => window.clearTimeout(timeoutId);
+    }, [
+        currentUserEmail,
+        currentUserId,
+        currentUserName,
+        currentUserPicture,
+        edges,
+        effectiveCurrentUserRole,
+        isGraphHydrating,
+        nodes,
+        normalizedStage,
+        projectId,
+    ]);
+
+    useEffect(() => {
+        if (!projectId || !currentUserId || isGraphHydrating) return undefined;
+        const nextTitle = String(projectTitle || "").trim() || "Untitled Project";
+        if (nextTitle === lastSyncedTitleRef.current) return undefined;
+        const timeoutId = window.setTimeout(async () => {
+            try {
+                await updateProject(projectId, {
+                    title: nextTitle,
+                    actor: {
+                        id: currentUserId,
+                        name: currentUserName,
+                        email: currentUserEmail,
+                        picture: currentUserPicture,
+                        role: effectiveCurrentUserRole,
+                    },
+                });
+                lastSyncedTitleRef.current = nextTitle;
+                await refreshProjectCollaborationMeta();
+            } catch (error) {
+                console.error("Failed to sync project title:", error);
+            }
+        }, 350);
+        return () => window.clearTimeout(timeoutId);
+    }, [
+        currentUserEmail,
+        currentUserId,
+        currentUserName,
+        currentUserPicture,
+        effectiveCurrentUserRole,
+        isGraphHydrating,
+        projectId,
+        projectTitle,
+        refreshProjectCollaborationMeta,
+    ]);
+
+    const handleStageChange = useCallback((nextStage) => {
+        const safeStage = normalizeReasoningStage(nextStage);
+        if (safeStage === normalizedStage) return;
+        setStage(safeStage);
+        void recordProjectActivity("stage_changed", {
+            nodeTitle: safeStage,
+            nodeType: "Stage",
+            before: { stage: normalizedStage },
+            after: { stage: safeStage },
+            relatedNodeIds: [],
+            metadata: {
+                reason: "Canvas reasoning stage changed",
+            },
+            stage: safeStage,
+        });
+    }, [normalizedStage, recordProjectActivity]);
+
     // 채팅 대화에서 노드+엣지 추가
     const handleAddNodesFromChat = useCallback((data, { commitVisibility = "shared" } = {}) => {
         const incoming = Array.isArray(data?.nodes) ? data.nodes : [];
@@ -269,8 +441,8 @@ export default function ThinkingMachine({
             ...n,
             data: {
                 ...n.data,
-                ownerId: MOCK_CURRENT_USER_ID,
-                editedBy: "You",
+                ownerId: currentUserId,
+                editedBy: currentUserName,
                 visibility: normalizeVisibility(n?.data?.visibility === "candidate" ? commitVisibility : n?.data?.visibility),
             },
         }));
@@ -285,19 +457,30 @@ export default function ThinkingMachine({
         setEdges(nextEdges);
         animateViewportToNodes(relaidNodes.filter((node) => insertedIds.has(node.id)));
         normalizedIncoming.forEach((node) => {
-            recordProjectActivity("node_created", {
+            const targetNode = relaidNodes.find((item) => item.id === node.id);
+            const relatedNodeIds = getRelatedNodeIds(node.id, nextEdges);
+            void recordProjectActivity("node_created", {
                 nodeId: node.id,
                 nodeTitle: node?.data?.label,
                 nodeType: node?.data?.category,
+                before: null,
+                after: getNodeSnapshot(targetNode, nextEdges),
+                relatedNodeIds,
+                stage: normalizedStage,
             });
             if (node?.data?.category === "Conflict") {
-                recordProjectActivity("conflict_created", {
+                void recordProjectActivity("conflict_created", {
                     nodeId: node.id,
                     nodeTitle: node?.data?.label,
+                    nodeType: node?.data?.category,
+                    before: null,
+                    after: getNodeSnapshot(targetNode, nextEdges),
+                    relatedNodeIds,
+                    stage: normalizedStage,
                 });
             }
         });
-    }, [animateViewportToNodes, edges, nodes, recordProjectActivity, setEdges, setNodes]);
+    }, [animateViewportToNodes, currentUserId, currentUserName, edges, nodes, normalizedStage, recordProjectActivity, setEdges, setNodes]);
 
     function handlePreviewNodesFromChat(data) {
         const incoming = Array.isArray(data?.nodes) ? data.nodes : [];
@@ -311,8 +494,8 @@ export default function ThinkingMachine({
                     ...n,
                     data: {
                         ...n.data,
-                        ownerId: MOCK_CURRENT_USER_ID,
-                        editedBy: "You",
+                        ownerId: currentUserId,
+                        editedBy: currentUserName,
                         visibility: "candidate",
                     },
                 })),
@@ -349,29 +532,27 @@ export default function ThinkingMachine({
         setActiveSuggestion(null);
     }, [setActiveSuggestion]);
 
-    const syncVisibilityChangeMock = useCallback((nodeId, nextVisibility) => {
-        void nodeId;
-        void nextVisibility;
-        // TODO: Replace this local-only mock with multi-user sync/persistence when collaboration is introduced.
-    }, []);
-
     const handleSetNodeVisibility = useCallback((nodeId, nextVisibility) => {
         const normalizedNext = normalizeVisibility(nextVisibility);
         let previousVisibility = null;
         let nextNodeTitle = "";
         let nextNodeType = "";
+        let beforeSnapshot = null;
+        let afterSnapshot = null;
+        const relatedNodeIds = getRelatedNodeIds(nodeId, edges);
         setNodes((prevNodes) =>
             prevNodes.map((node) => {
                 if (node.id !== nodeId || node.type !== "thinkingNode") return node;
                 previousVisibility = normalizeVisibility(node.data?.visibility);
                 nextNodeTitle = node.data?.title || "";
                 nextNodeType = node.data?.category || "";
+                beforeSnapshot = getNodeSnapshot(node, edges);
                 const updated = {
                     ...node,
                     data: {
                         ...node.data,
-                        ownerId: MOCK_CURRENT_USER_ID,
-                        editedBy: "You",
+                        ownerId: currentUserId,
+                        editedBy: currentUserName,
                         visibility: normalizedNext,
                     },
                 };
@@ -390,6 +571,7 @@ export default function ThinkingMachine({
                         confidence: updated.data?.confidence,
                     },
                 }, null);
+                afterSnapshot = getNodeSnapshot({ ...updated, ...rebuilt }, edges);
                 return {
                     ...updated,
                     ...rebuilt,
@@ -400,15 +582,27 @@ export default function ThinkingMachine({
                 };
             })
         );
+        void recordProjectActivity("node_visibility_changed", {
+            nodeId,
+            nodeTitle: nextNodeTitle,
+            nodeType: nextNodeType,
+            before: beforeSnapshot,
+            after: afterSnapshot,
+            relatedNodeIds,
+            stage: normalizedStage,
+        });
         if (normalizedNext === "shared" && previousVisibility !== "shared") {
-            recordProjectActivity("node_shared", {
+            void recordProjectActivity("node_shared", {
                 nodeId,
                 nodeTitle: nextNodeTitle,
                 nodeType: nextNodeType,
+                before: beforeSnapshot,
+                after: afterSnapshot,
+                relatedNodeIds,
+                stage: normalizedStage,
             });
         }
-        syncVisibilityChangeMock(nodeId, normalizedNext);
-    }, [recordProjectActivity, setNodes, syncVisibilityChangeMock]);
+    }, [currentUserId, currentUserName, edges, normalizedStage, recordProjectActivity, setNodes]);
 
     const handleNodeSelectionChange = useCallback(
         ({ nodes: selectedNodes = [] } = {}) => {
@@ -438,7 +632,7 @@ export default function ThinkingMachine({
         edges,
         selectedNodeId,
         canvasMode,
-        currentUserId: MOCK_CURRENT_USER_ID,
+        currentUserId,
     });
 
     useEffect(() => {
@@ -512,33 +706,7 @@ export default function ThinkingMachine({
         };
     }, [pendingChatCandidateGraph]);
 
-    const normalizedStage = useMemo(() => normalizeReasoningStage(stage), [stage]);
     const reasoningModeProfile = useMemo(() => getReasoningModeProfile(normalizedStage), [normalizedStage]);
-    const composerSuggestedTypes = useMemo(() => {
-        const modeBias = reasoningModeProfile.nodeBias || [];
-        if (!selectedNode) {
-            return modeBias.slice(0, 4);
-        }
-        const category = selectedNode.data?.category;
-        const contextualMap = {
-            Problem: ["Evidence", "Insight", "Risk", "Constraint"],
-            Goal: ["Idea", "Option", "Constraint", "Risk"],
-            Insight: ["Evidence", "Idea", "OpenQuestion", "Risk"],
-            Evidence: ["Insight", "Conflict", "Risk", "OpenQuestion"],
-            Idea: ["Option", "Evidence", "Risk", "Constraint"],
-            Decision: ["Evidence", "Constraint", "Risk", "OpenQuestion"],
-        };
-        const base = contextualMap[category] || ["Insight", "Evidence", "Idea", "Risk"];
-        return [...new Set([...modeBias, ...base])].slice(0, 5);
-    }, [reasoningModeProfile.nodeBias, selectedNode]);
-
-    const composerHintText = useMemo(() => {
-        if (selectedNode) {
-            return reasoningModeProfile.selectedNodePrompt;
-        }
-        return reasoningModeProfile.composerHint;
-    }, [reasoningModeProfile, selectedNode]);
-
     const { handleInputSubmit } = useThinkingAiAnalyze({
         nodes,
         edges,
@@ -553,7 +721,8 @@ export default function ThinkingMachine({
         recordProjectActivity,
         animateViewportToNodes,
         setIsAnalyzing,
-        currentUserId: MOCK_CURRENT_USER_ID,
+        currentUserId,
+        currentUserName,
     });
 
     // 우측 Drawer 하단 입력창 동작:
@@ -576,6 +745,103 @@ export default function ThinkingMachine({
         await handleDrawerChatSubmit();
     }, [activeSuggestion, chatInput, handleDrawerChatSubmit, handleInputSubmit, isAnalyzing, selectedNode, setChatInput]);
 
+    const filteredTeamActivity = useMemo(() => {
+        const items = Array.isArray(activityLog) ? activityLog : [];
+        if (!selectedTeamMemberId) return items;
+        return items.filter((item) => item?.userId === selectedTeamMemberId);
+    }, [activityLog, selectedTeamMemberId]);
+
+    const selectedActivityItem = useMemo(
+        () => filteredTeamActivity.find((item) => item?.id === selectedActivityEventId) || null,
+        [filteredTeamActivity, selectedActivityEventId]
+    );
+
+    const focusNodesByIds = useCallback((nodeIds = []) => {
+        const ids = Array.from(new Set((Array.isArray(nodeIds) ? nodeIds : []).filter(Boolean)));
+        if (!ids.length) return;
+        setCanvasMode("team");
+        setHighlightedNodeIds(new Set(ids));
+        const targetNodes = nodes.filter((node) => ids.includes(node.id));
+        if (targetNodes.length) {
+            animateViewportToNodes(targetNodes);
+            const firstTarget = targetNodes.find((node) => node?.type === "thinkingNode");
+            if (firstTarget?.id) {
+                setSelectedNodeId(firstTarget.id);
+                setDrawerMode("chat");
+                setIsDrawerOpen(true);
+            }
+        }
+    }, [animateViewportToNodes, nodes]);
+
+    const handleSelectTeamMember = useCallback((memberId) => {
+        setSelectedTeamMemberId(memberId);
+        setSelectedActivityEventId(null);
+        setTeamContextSummary(null);
+        setTeamContextError("");
+    }, []);
+
+    const handleSelectActivity = useCallback((item) => {
+        if (!item) return;
+        setSelectedActivityEventId(item.id);
+        if (item?.userId) setSelectedTeamMemberId(item.userId);
+        setTeamContextSummary(null);
+        setTeamContextError("");
+        focusNodesByIds([item.nodeId, ...(item.relatedNodeIds || [])]);
+    }, [focusNodesByIds]);
+
+    const handleExplainTeamContext = useCallback(async () => {
+        const eventScope = selectedActivityItem
+            ? [selectedActivityItem]
+            : filteredTeamActivity.slice(0, 8);
+        const relatedNodeIds = Array.from(
+            new Set(
+                eventScope.flatMap((item) => [item?.nodeId, ...((Array.isArray(item?.relatedNodeIds) ? item.relatedNodeIds : []))])
+                    .filter(Boolean)
+            )
+        );
+        const relatedNodes = nodes
+            .filter((node) => relatedNodeIds.includes(node.id))
+            .map((node) => ({
+                id: node.id,
+                title: node?.data?.title || "",
+                content: node?.data?.content || "",
+                category: node?.data?.category,
+                phase: node?.data?.phase,
+            }));
+
+        setIsTeamContextLoading(true);
+        setTeamContextError("");
+        try {
+            const member = teamMembers.find((item) => item?.id === selectedTeamMemberId) || null;
+            const result = await summarizeTeamContext({
+                projectId,
+                projectTitle,
+                memberId: member?.id || null,
+                memberName: member?.name || "",
+                memberRole: member?.role || "",
+                activityEvents: eventScope,
+                relatedNodes,
+                stage: normalizedStage,
+            });
+            setTeamContextSummary(result);
+            if (Array.isArray(result?.keyNodeIds) && result.keyNodeIds.length) {
+                focusNodesByIds(result.keyNodeIds);
+            }
+        } catch (error) {
+            setTeamContextError(
+                error?.response?.data?.error ||
+                error?.message ||
+                "Failed to summarize the team context."
+            );
+        } finally {
+            setIsTeamContextLoading(false);
+        }
+    }, [filteredTeamActivity, focusNodesByIds, nodes, normalizedStage, projectId, projectTitle, selectedActivityItem, selectedTeamMemberId, teamMembers]);
+
+    const handleToggleTeamContextPanel = useCallback(() => {
+        setIsTeamContextPanelOpen((prev) => !prev);
+    }, []);
+
     return (
         <div className="w-full h-screen relative flex flex-col overflow-hidden bg-slate-50">
             <div
@@ -594,7 +860,7 @@ export default function ThinkingMachine({
             </div>
             <TopBar
                 stage={normalizedStage}
-                onStageChange={setStage}
+                onStageChange={handleStageChange}
                 projectTitle={projectTitle}
                 onProjectTitleChange={setProjectTitle}
                 projectMetaHref={projectMetaHref}
@@ -629,6 +895,22 @@ export default function ThinkingMachine({
             </header>
 
             <main className="flex-1 w-full h-full relative">
+                <LeftTeamContextPanel
+                    isOpen={isTeamContextPanelOpen}
+                    teamMembers={teamMembers}
+                    activityItems={filteredTeamActivity}
+                    selectedMemberId={selectedTeamMemberId}
+                    selectedActivityId={selectedActivityEventId}
+                    summary={teamContextSummary}
+                    isSummaryLoading={isTeamContextLoading}
+                    summaryError={teamContextError}
+                    currentUserId={currentUserId}
+                    onToggle={handleToggleTeamContextPanel}
+                    onSelectMember={handleSelectTeamMember}
+                    onSelectActivity={handleSelectActivity}
+                    onExplainContext={handleExplainTeamContext}
+                    onFocusNode={(nodeId) => focusNodesByIds([nodeId])}
+                />
                 {!hasThinkingGraph ? (
                     <div className="tm-canvas-bg h-full w-full" data-stage={stage}>
                         <div className="absolute inset-0 z-[5]" />
@@ -653,6 +935,7 @@ export default function ThinkingMachine({
                                 onImagePick: handleImagePick,
                                 onImageChangeCaption: handleImageChangeCaption,
                                 onDraftSubmit: handleDraftSubmit,
+                                onToggleIdeaGroup: toggleIdeaGroupMode,
                             }}
                             draftSubmittingIds={draftSubmittingIds}
                             canvasStage={stage}
@@ -695,12 +978,12 @@ export default function ThinkingMachine({
                             mode={drawerMode}
                             stage={normalizedStage}
                             suggestions={unseenSuggestions}
-                            onStageChange={setStage}
+                            onStageChange={handleStageChange}
                             activeSuggestion={activeSuggestion}
                             selectedNode={selectedNode}
                             linkedNodes={selectedNodeLinkedNodes}
                             candidateGraph={pendingCandidatePreview}
-                            currentUserRole={MOCK_CURRENT_USER_ROLE}
+                            currentUserRole={effectiveCurrentUserRole}
                             projectLastUpdated={projectLastUpdated}
                             activityLog={activityLog}
                             lastRefreshedAt={lastRefreshedAt}

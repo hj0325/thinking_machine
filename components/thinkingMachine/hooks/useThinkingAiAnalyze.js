@@ -9,6 +9,22 @@ import {
 } from "@/lib/thinkingMachine/graphMerge";
 import { normalizeRelationLabel, normalizeVisibility } from "@/lib/thinkingMachine/nodeMeta";
 
+function getNodeSnapshot(node, edges = []) {
+  if (!node) return null;
+  return {
+    id: node.id,
+    title: node?.data?.title || "",
+    content: node?.data?.content || "",
+    category: node?.data?.category || "",
+    phase: node?.data?.phase || "",
+    visibility: normalizeVisibility(node?.data?.visibility),
+    linkedNodeIds: (Array.isArray(edges) ? edges : [])
+      .filter((edge) => edge?.source === node.id || edge?.target === node.id)
+      .map((edge) => (edge.source === node.id ? edge.target : edge.source))
+      .filter(Boolean),
+  };
+}
+
 function mergeSuggestionUnique(prev, nextSuggestion) {
   if (!nextSuggestion) return prev;
   const key = `${String(nextSuggestion.category || "").toLowerCase()}::${String(nextSuggestion.title || "")
@@ -41,6 +57,7 @@ export function useThinkingAiAnalyze({
   animateViewportToNodes,
   setIsAnalyzing,
   currentUserId,
+  currentUserName = "You",
 }) {
   const handleInputSubmit = useCallback(
     async ({ text, preferredType, selectedNode: inputContextNode } = {}) => {
@@ -86,7 +103,7 @@ export function useThinkingAiAnalyze({
             data: {
               ...n.data,
               ownerId: currentUserId,
-              editedBy: "You",
+              editedBy: currentUserName,
               visibility: "private",
             },
           }));
@@ -148,15 +165,26 @@ export function useThinkingAiAnalyze({
         setDrawerMode("tip");
         setIsDrawerOpen(true);
         userNodeDatas.forEach((node) => {
-          recordProjectActivity("node_created", {
+          const targetNode = relaidNodes.find((item) => item.id === node.id);
+          const snapshot = getNodeSnapshot(targetNode, nextEdges);
+          void recordProjectActivity("node_created", {
             nodeId: node.id,
             nodeTitle: node?.data?.label,
             nodeType: node?.data?.category,
+            before: null,
+            after: snapshot,
+            relatedNodeIds: snapshot?.linkedNodeIds || [],
+            stage,
           });
           if (node?.data?.category === "Conflict") {
-            recordProjectActivity("conflict_created", {
+            void recordProjectActivity("conflict_created", {
               nodeId: node.id,
               nodeTitle: node?.data?.label,
+              nodeType: node?.data?.category,
+              before: null,
+              after: snapshot,
+              relatedNodeIds: snapshot?.linkedNodeIds || [],
+              stage,
             });
           }
         });
@@ -174,6 +202,7 @@ export function useThinkingAiAnalyze({
     [
       animateViewportToNodes,
       currentUserId,
+      currentUserName,
       edges,
       nodes,
       projectTitle,
