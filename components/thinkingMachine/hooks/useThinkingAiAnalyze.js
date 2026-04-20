@@ -130,6 +130,7 @@ export function useThinkingAiAnalyze({
             visibility: normalizeVisibility(suggestionNodeData.data.visibility),
             confidence: suggestionNodeData.data.confidence,
             ownerId: suggestionNodeData.data.ownerId,
+            suggestionTags: suggestionNodeData.data.suggestionTags || null,
             relatedNodeId: highlightedMainNodeId,
           };
           setSuggestions((prev) => mergeSuggestionUnique(prev, newSuggestion));

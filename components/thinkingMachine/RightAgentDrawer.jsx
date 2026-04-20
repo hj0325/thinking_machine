@@ -4,17 +4,32 @@ import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { ArrowLeft, ArrowRight, ArrowUp, GitBranch, Image as ImageIcon, Loader2, Sparkles, StickyNote } from "lucide-react";
 import {
-  getConfidenceMeta,
-  getSourceTypeMeta,
+  getSuggestionTagMeta,
   getTypeMeta,
-  getVisibilityMeta,
   normalizeReasoningStage,
   normalizeNodeData,
+  normalizeSuggestionTags,
 } from "@/lib/thinkingMachine/nodeMeta";
 import ContextMiniCard from "@/components/thinkingMachine/cards/ContextMiniCard";
 import NodeDetailCard from "@/components/thinkingMachine/cards/NodeDetailCard";
 import CandidateGraphCard from "@/components/thinkingMachine/cards/CandidateGraphCard";
 const DRAWER_TOP_SAFE_ZONE = 4;
+
+function MicButtonIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className="h-[18px] w-[18px]">
+      <rect x="9" y="3.5" width="6" height="10" rx="3" fill="currentColor" />
+      <path
+        d="M6.5 10.5C6.5 13.5376 8.96243 16 12 16C15.0376 16 17.5 13.5376 17.5 10.5"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+      <path d="M12 16V20" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M8.5 20H15.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
 
 function parseStage(stage) {
   const value = normalizeReasoningStage(stage);
@@ -72,9 +87,7 @@ export default function RightAgentDrawer({
   const shouldShowContextPanel = suggestionItems.length > 0;
   const activeMeta = normalizeNodeData(activeSuggestion || {});
   const categoryColors = getTypeMeta(activeMeta.category);
-  const confidenceMeta = getConfidenceMeta(activeMeta.confidence);
-  const sourceMeta = getSourceTypeMeta(activeMeta.sourceType);
-  const visibilityMeta = getVisibilityMeta(activeMeta.visibility);
+  const activeSuggestionTags = normalizeSuggestionTags(activeSuggestion?.suggestionTags || activeSuggestion?.tags, activeMeta);
   const drawerFieldBaseFade =
     "linear-gradient(169.55deg, rgba(199, 251, 201, 0.3) 9.44%, rgba(179, 236, 236, 0.3) 97.4%)";
   const drawerFieldRadialAlpha = "none";
@@ -98,6 +111,7 @@ export default function RightAgentDrawer({
         workspaceTab: "Workspace",
         note: "노트",
         image: "이미지",
+        voice: "음성",
       }
     : {
         emptyChat: "Select a node, drag it to the right, and drop it to attach it as chat context.",
@@ -108,6 +122,7 @@ export default function RightAgentDrawer({
         workspaceTab: "Workspace",
         note: "Note",
         image: "Image",
+        voice: "Voice",
       };
 
   useEffect(() => {
@@ -354,18 +369,18 @@ export default function RightAgentDrawer({
                       {activeSuggestion ? (
                         <div className={`rounded-[14px] border ${categoryColors.border} ${categoryColors.tint} px-3 py-3`}>
                           <div className="flex flex-wrap items-center gap-1.5">
-                            <div className={`text-[10px] font-bold uppercase tracking-wider ${categoryColors.text}`}>
-                              {activeMeta.category}
-                            </div>
-                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${sourceMeta.className}`}>
-                              {sourceMeta.label}
-                            </span>
-                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${visibilityMeta.className}`}>
-                              {visibilityMeta.label}
-                            </span>
-                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${confidenceMeta.className}`}>
-                              {confidenceMeta.label}
-                            </span>
+                            {[
+                              ["reasoning", activeSuggestionTags.reasoning],
+                              ["lens", activeSuggestionTags.lens],
+                              ["question", activeSuggestionTags.question],
+                            ].map(([axis, value]) => {
+                              const meta = getSuggestionTagMeta(axis, value);
+                              return (
+                                <span key={`${axis}-${value}`} className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${meta.className}`}>
+                                  {value}
+                                </span>
+                              );
+                            })}
                           </div>
                           <div className="font-heading mt-1 line-clamp-1 text-xs font-semibold text-slate-800">
                             {activeSuggestion.title}
@@ -446,6 +461,14 @@ export default function RightAgentDrawer({
                         title={copy.image}
                       >
                         <ImageIcon className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/80 bg-white/78 text-slate-600 shadow-[0_6px_14px_rgba(0,0,0,0.07)] transition hover:bg-white"
+                        aria-label={copy.voice}
+                        title={copy.voice}
+                      >
+                        <MicButtonIcon />
                       </button>
                     </div>
 

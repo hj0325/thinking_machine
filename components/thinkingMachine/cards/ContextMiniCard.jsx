@@ -1,12 +1,11 @@
 "use client";
 
-import { normalizeNodeData, getSourceTypeMeta, getTypeMeta, getVisibilityMeta } from "@/lib/thinkingMachine/nodeMeta";
+import { getSuggestionTagMeta, getTypeMeta, normalizeNodeData, normalizeSuggestionTags } from "@/lib/thinkingMachine/nodeMeta";
 
 export default function ContextMiniCard({ item, isActive, onSelect }) {
   const normalized = normalizeNodeData(item);
   const colors = getTypeMeta(normalized.category);
-  const sourceMeta = getSourceTypeMeta(normalized.sourceType);
-  const visibilityMeta = getVisibilityMeta(normalized.visibility);
+  const suggestionTags = normalizeSuggestionTags(item?.suggestionTags || item?.tags, normalized);
 
   return (
     <button
@@ -20,15 +19,18 @@ export default function ContextMiniCard({ item, isActive, onSelect }) {
       aria-label={`Select context card ${item?.title ?? ""}`}
     >
       <div className="mb-1 flex flex-wrap items-center gap-1.5 pr-2">
-        <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${colors.tint} ${colors.text}`}>
-          {normalized.category}
-        </span>
-        <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${sourceMeta.className}`}>
-          {sourceMeta.label}
-        </span>
-        <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${visibilityMeta.className}`}>
-          {visibilityMeta.label}
-        </span>
+        {[
+          ["reasoning", suggestionTags.reasoning],
+          ["lens", suggestionTags.lens],
+          ["question", suggestionTags.question],
+        ].map(([axis, value]) => {
+          const meta = getSuggestionTagMeta(axis, value);
+          return (
+            <span key={`${axis}-${value}`} className={`rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${meta.className}`}>
+              {value}
+            </span>
+          );
+        })}
       </div>
       <div className={`line-clamp-2 text-[11px] font-semibold leading-tight ${isActive ? colors.text : "text-slate-700"}`}>
         {item.title}

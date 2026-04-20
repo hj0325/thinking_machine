@@ -393,6 +393,7 @@ export function useDraftGrouping({
             sourceType: suggestionNodeData.data.sourceType,
             visibility: suggestionNodeData.data.visibility,
             confidence: suggestionNodeData.data.confidence,
+            suggestionTags: suggestionNodeData.data.suggestionTags || null,
             relatedNodeId: null,
           };
           setSuggestions?.((prev) => mergeSuggestionUnique(prev, newSuggestion));
