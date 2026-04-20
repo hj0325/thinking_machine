@@ -102,9 +102,9 @@ export default function ThinkingNode({ data = {} }) {
               {data.content}
             </div>
             <div className="mt-2.5 flex flex-wrap gap-1.5">
-              <MetaChip label={sourceMeta.label} className="bg-[#E3F3D9] text-[#194312]" />
-              <MetaChip label={fiveWhLabel} className="bg-[#FFF4C9] text-[#92400E]" />
-              <MetaChip label={phaseLabel} className="bg-[#FFE4DD] text-[#9B1C1C]" />
+              <MetaChip label={sourceMeta.label} className="bg-[#DBF4CD] text-[#5F6652]" />
+              <MetaChip label={fiveWhLabel} className="bg-[#C3EEE7] text-[#5F6652]" />
+              <MetaChip label={phaseLabel} className="bg-[#CADBFF] text-[#5F6652]" />
             </div>
           </div>
         </div>

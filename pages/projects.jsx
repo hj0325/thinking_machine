@@ -107,7 +107,7 @@ export default function ProjectsPage() {
           <button
             type="button"
             onClick={handleCreateProject}
-            className="rounded-2xl bg-sky-400 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-sky-300"
+            className="rounded-2xl bg-[#9ED9BF] px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-[#9ED9BF]"
           >
             Create New Project
           </button>
@@ -132,7 +132,7 @@ export default function ProjectsPage() {
                 <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-sky-700">
                   Project
                 </div>
-                <div className="mt-3 line-clamp-2 text-xl font-semibold tracking-[-0.03em] text-slate-900">
+                <div className="-translate-y-[8px] mt-3 line-clamp-2 text-xl font-semibold tracking-[-0.03em] text-slate-900">
                   {project.title || "Untitled Project"}
                 </div>
                 <div className="mt-6 text-xs text-slate-600">
