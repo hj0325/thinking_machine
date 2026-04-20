@@ -1,0 +1,245 @@
+@import url("https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap");
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+  --font-family-ui: "Instrument Sans", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-family-heading: "Inter", "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-family-node-body: "Instrument Sans", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --canvas-bg-base: #f2f7f7;
+  --canvas-stage-research-diverge: #4dd6f8;
+  --canvas-stage-research-converge: #ffff86;
+  --canvas-stage-ideation-diverge: #ff969f;
+  --canvas-stage-ideation-converge: #d5a6ff;
+  --canvas-gradient-center-x: 50%;
+  --canvas-gradient-center-y: 80%;
+  --canvas-gradient-radius-x: 60%;
+  --canvas-gradient-radius-y: 78%;
+  --canvas-stage-rgb: 77, 214, 248;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-family-ui);
+  margin: 0;
+  padding: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+.font-heading {
+  font-family: var(--font-family-heading);
+}
+
+.font-node-body {
+  font-family: var(--font-family-node-body);
+}
+
+.reactflow-canvas-pan .react-flow__pane {
+  cursor: grab;
+}
+
+.reactflow-canvas-pan .react-flow__pane.dragging {
+  cursor: grabbing;
+}
+
+.tm-canvas-bg {
+  position: relative;
+  overflow: hidden;
+  background: var(--canvas-bg-base);
+}
+
+.tm-canvas-bg::before {
+  content: "";
+  position: absolute;
+  left: -8px;
+  top: -34px;
+  width: calc(100% + 16px);
+  height: calc(100% + 68px);
+  pointer-events: none;
+  z-index: 0;
+  background-image: repeating-linear-gradient(
+      to bottom,
+      rgba(255, 255, 255, 0.88) 0,
+      rgba(255, 255, 255, 0.88) 1px,
+      transparent 1px,
+      transparent 14px
+    ),
+    repeating-linear-gradient(
+      to right,
+      rgba(255, 255, 255, 0.88) 0,
+      rgba(255, 255, 255, 0.88) 1px,
+      transparent 1px,
+      transparent 14px
+    );
+  background-position: 0 0, 16px 15px;
+  opacity: 0.7;
+}
+
+.tm-canvas-bg[data-stage="research-diverge"] {
+  --canvas-stage-rgb: 77, 214, 248;
+}
+
+.tm-canvas-bg[data-stage="research-converge"] {
+  --canvas-stage-rgb: 255, 255, 134;
+}
+
+.tm-canvas-bg[data-stage="ideation-diverge"] {
+  --canvas-stage-rgb: 255, 150, 159;
+}
+
+.tm-canvas-bg[data-stage="ideation-converge"] {
+  --canvas-stage-rgb: 213, 166, 255;
+}
+
+.tm-canvas-flow .react-flow__renderer,
+.tm-canvas-flow .react-flow__pane,
+.tm-canvas-flow .react-flow__viewport {
+  background: transparent;
+}
+
+.tm-canvas-flow .react-flow__node {
+  transition: transform 3000ms ease-in, filter 220ms ease, opacity 220ms ease;
+}
+
+.tm-canvas-flow .react-flow__node.tm-node-shell,
+.tm-canvas-flow .react-flow__node-thinkingNode,
+.tm-canvas-flow .react-flow__node-ideaGroup,
+.tm-canvas-flow .react-flow__node-postitDraft,
+.tm-canvas-flow .react-flow__node-imageDraft {
+  filter: saturate(0.98);
+}
+
+.tm-canvas-flow .react-flow__node.tm-node-shell:hover,
+.tm-canvas-flow .react-flow__node-thinkingNode:hover,
+.tm-canvas-flow .react-flow__node-ideaGroup:hover,
+.tm-canvas-flow .react-flow__node-postitDraft:hover,
+.tm-canvas-flow .react-flow__node-imageDraft:hover {
+  transform: translateY(-1px);
+  filter: saturate(1.02) brightness(1.01);
+}
+
+.tm-canvas-flow .react-flow__node.selected {
+  z-index: 30;
+}
+
+.tm-canvas-flow .react-flow__edge {
+  transition: opacity 160ms ease, filter 160ms ease;
+}
+
+.tm-canvas-flow .react-flow__edge:hover {
+  opacity: 0.94;
+  filter: saturate(1.03);
+}
+
+@keyframes selectedNodePulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.18), 0 12px 24px -18px rgba(56, 189, 248, 0.18);
+  }
+
+  50% {
+    box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.34), 0 16px 28px -16px rgba(56, 189, 248, 0.28);
+  }
+}
+
+.node-highlighted {
+  border-radius: 22px;
+  z-index: 10;
+  box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.18), 0 8px 18px -16px rgba(245, 158, 11, 0.2);
+}
+
+.tm-canvas-flow .react-flow__node.selected.tm-node-shell,
+.tm-canvas-flow .react-flow__node.selected.react-flow__node-thinkingNode,
+.tm-canvas-flow .react-flow__node.selected.react-flow__node-ideaGroup,
+.tm-canvas-flow .react-flow__node.selected.react-flow__node-postitDraft,
+.tm-canvas-flow .react-flow__node.selected.react-flow__node-imageDraft {
+  transform: translateY(-1px);
+  filter: saturate(1.03);
+  animation: selectedNodePulse 2.8s ease-in-out infinite;
+  border-radius: 22px;
+  z-index: 31;
+}
+
+.tm-canvas-flow .react-flow__edge.selected {
+  opacity: 1;
+}
+
+.tm-canvas-flow .react-flow__node.node-selected-focus,
+.tm-canvas-flow .react-flow__node.selected.node-selected-focus {
+  animation: selectedNodePulse 2.8s ease-in-out infinite;
+  border-radius: 22px;
+  z-index: 32;
+  filter: saturate(1.05) brightness(1.02);
+}
+
+@keyframes composerGradientFlow {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
+@keyframes drawerGradientFlow {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 180% 50%;
+  }
+}
+
+.composer-loading-gradient-text {
+  background-image: linear-gradient(142.46deg, #7FD1DB 13.82%, #788DBC 66.77%, #586789 119.72%);
+  background-size: 200% 100%;
+  animation: composerGradientFlow 2.2s linear infinite;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.drawer-loading-gradient-text {
+  background-image: linear-gradient(
+    90deg,
+    #386644 0%,
+    #46773f 12%,
+    #5ea841 26%,
+    #6de422 40%,
+    #97ed58 54%,
+    #d6d07a 72%,
+    #ffa397 86%,
+    #8fb853 94%,
+    #386644 100%
+  );
+  background-size: 220% 100%;
+  animation: drawerGradientFlow 4.2s ease-in-out infinite;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
