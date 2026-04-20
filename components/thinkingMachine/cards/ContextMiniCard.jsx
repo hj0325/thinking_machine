@@ -18,7 +18,7 @@ export default function ContextMiniCard({ item, isActive, onSelect }) {
       onClick={() => onSelect?.(item)}
       aria-label={`Select context card ${item?.title ?? ""}`}
     >
-      <div className="mb-1 flex flex-wrap items-center gap-1.5 pr-2">
+      <div className="mb-2 flex flex-wrap items-center gap-1.5 pr-2">
         {[
           ["reasoning", suggestionTags.reasoning],
           ["lens", suggestionTags.lens],
