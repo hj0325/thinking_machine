@@ -102,9 +102,9 @@ export default function Home() {
       <div className="pointer-events-none absolute inset-0 z-0 bg-[#F3F8F8]" />
       <div className="pointer-events-none absolute inset-0 z-8 opacity-30">
         <ColorBends
-          colors={["#7BA592", "#8FDDAF", "#349B6D", "#9DE7CB", "#349B6D", "#76D7A1"]}
+          colors={["#7BA592", "#8FDDAF", "#349B6D73", "#9DE7CB", "#349B6D73", "#76D7A1"]}
           rotation={100}
-          speed={0.2}
+          speed={0.32}
           scale={1}
           frequency={1}
           warpStrength={1}
