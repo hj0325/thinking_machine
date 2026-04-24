@@ -61,6 +61,10 @@ export default function RightAgentDrawer({
   onChatInputChange,
   onChatSubmit,
   onChatConvertToNodes,
+  inputMode = "workspace",
+  onInputModeChange,
+  meetingCaptureSummary,
+  isMeetingCaptureLoading = false,
   onCommitCandidateNodes,
   onCommitCandidateNodesAsPrivate,
   onDiscardCandidateNodes,
@@ -84,6 +88,7 @@ export default function RightAgentDrawer({
 }) {
   const isTip = mode === "tip";
   const isChat = mode === "chat";
+  const isMeetingCapture = inputMode === "meeting";
   const { mode: thinkingMode, flow: thinkingFlow } = parseStage(stage);
   const suggestionItems = Array.isArray(suggestions) ? suggestions : [];
   const shouldShowContextPanel = suggestionItems.length > 0;
@@ -109,6 +114,8 @@ export default function RightAgentDrawer({
         emptySuggestions: "제안 카드를 선택해 에이전트와 reasoning 흐름을 확장하세요.",
         emptyWorkspace: "노드 컨텍스트를 첨부해 워크스페이스 대화를 시작하세요.",
         emptySuggestionState: "제안을 선택해 구조를 검토하거나 확장하세요.",
+        meetingTab: "회의",
+        workspaceInputTab: "워크스페이스",
         suggestionsTab: "Suggestions",
         workspaceTab: "Workspace",
         note: "노트",
@@ -120,6 +127,8 @@ export default function RightAgentDrawer({
         emptySuggestions: "Select a suggestion card to expand the reasoning flow with the agent.",
         emptyWorkspace: "Attach node context to begin the workspace conversation.",
         emptySuggestionState: "Select a suggestion to inspect, challenge, or extend the reasoning.",
+        meetingTab: "Meeting",
+        workspaceInputTab: "Workspace",
         suggestionsTab: "Suggestions",
         workspaceTab: "Workspace",
         note: "Note",
@@ -264,7 +273,32 @@ export default function RightAgentDrawer({
             </div>
           <div className="relative z-10 flex h-full min-h-0 flex-col px-5 pb-4 pt-4">
             <div className="mb-2 flex justify-end pr-1">
-              <div className="pointer-events-auto inline-flex items-center rounded-[14px] border border-white/80 bg-white/72 p-[2px] shadow-[0_7px_18px_rgba(76,108,90,0.10)] backdrop-blur-[14px]">
+              <div className="flex items-center gap-2">
+                <div className="pointer-events-auto inline-flex items-center rounded-[14px] border border-white/80 bg-white/72 p-[2px] shadow-[0_7px_18px_rgba(76,108,90,0.10)] backdrop-blur-[14px]">
+                  <button
+                    type="button"
+                    onClick={() => onInputModeChange?.("workspace")}
+                    className={`inline-flex h-6 min-w-[74px] items-center justify-center rounded-[12px] px-2.5 text-[10px] font-semibold transition ${
+                      !isMeetingCapture
+                        ? "bg-[#6F8A7B] text-white shadow-[0_3px_8px_rgba(123,165,146,0.20)]"
+                        : "text-[#839083]"
+                    }`}
+                  >
+                    {copy.workspaceInputTab}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onInputModeChange?.("meeting")}
+                    className={`inline-flex h-6 min-w-[68px] items-center justify-center rounded-[12px] px-2.5 text-[10px] font-semibold transition ${
+                      isMeetingCapture
+                        ? "bg-[#6F8A7B] text-white shadow-[0_3px_8px_rgba(123,165,146,0.20)]"
+                        : "text-[#839083]"
+                    }`}
+                  >
+                    {copy.meetingTab}
+                  </button>
+                </div>
+                <div className="pointer-events-auto inline-flex items-center rounded-[14px] border border-white/80 bg-white/72 p-[2px] shadow-[0_7px_18px_rgba(76,108,90,0.10)] backdrop-blur-[14px]">
                 <button
                   type="button"
                   onClick={() => onCanvasModeChange?.("personal")}
@@ -287,6 +321,7 @@ export default function RightAgentDrawer({
                 >
                   Team
                 </button>
+                </div>
               </div>
             </div>
 
@@ -368,6 +403,33 @@ export default function RightAgentDrawer({
                         onClearSelection={onClearSelectedNode}
                       />
                       <AlignmentSummaryCard selectedNode={selectedNode} summary={alignmentSummary} />
+                      {isMeetingCapture ? (
+                        <div className="rounded-2xl border border-white/70 bg-white/80 p-3 shadow-sm">
+                          <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Meeting capture</div>
+                          <div className="mt-1 text-[11px] leading-relaxed text-slate-500">
+                            Ingest each speaker turn or note block as a new reasoning chunk. The graph and decision memory update immediately.
+                          </div>
+                          <div className="mt-3 rounded-xl bg-slate-50/90 px-3 py-2.5">
+                            <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">Latest update</div>
+                            <div className="mt-1 text-[12px] text-slate-700">
+                              {meetingCaptureSummary?.chunkSummary || "No meeting chunk has been captured yet."}
+                            </div>
+                            {meetingCaptureSummary ? (
+                              <div className="mt-2 flex flex-wrap gap-1.5">
+                                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                                  Created {meetingCaptureSummary.createdNodeIds?.length || 0}
+                                </span>
+                                <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-700">
+                                  Linked {meetingCaptureSummary.linkedNodeIds?.length || 0}
+                                </span>
+                                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                                  Strengthened {meetingCaptureSummary.strengthenedNodeIds?.length || 0}
+                                </span>
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+                      ) : null}
 
                       {activeSuggestion ? (
                         <div className={`rounded-[14px] border ${categoryColors.border} ${categoryColors.tint} px-3 py-3`}>
@@ -501,8 +563,8 @@ export default function RightAgentDrawer({
                               handleChatSubmit(event);
                             }
                           }}
-                          placeholder={selectedNode ? "Add a related thought..." : "Add a thought..."}
-                          disabled={isChatLoading}
+                          placeholder={isMeetingCapture ? "Add one meeting turn or note block..." : selectedNode ? "Add a related thought..." : "Add a thought..."}
+                          disabled={isChatLoading || isMeetingCaptureLoading}
                           rows={2}
                           className={`min-h-[68px] w-full resize-none border-none bg-transparent pr-11 text-[13px] font-medium leading-[1.45] outline-none ${
                             loadingOverlayText
@@ -512,7 +574,7 @@ export default function RightAgentDrawer({
                         />
                         <button
                           type="submit"
-                          disabled={isChatLoading || !chatInput?.trim()}
+                          disabled={isChatLoading || isMeetingCaptureLoading || !chatInput?.trim()}
                           className="absolute bottom-3.5 right-3.5 inline-flex h-9 w-9 items-center justify-center rounded-full border border-[rgba(97,129,95,0.35)] bg-[linear-gradient(136.99deg,rgba(199,255,232,0.28)_-0.49%,rgba(19,158,89,0.24)_142.16%),linear-gradient(0deg,rgba(147,205,186,0.2),rgba(147,205,186,0.2))] shadow-[0_6px_14px_rgba(61,107,79,0.10)] transition disabled:cursor-not-allowed disabled:opacity-50"
                           aria-label="Send message"
                         >
@@ -521,7 +583,7 @@ export default function RightAgentDrawer({
                       </div>
                     </form>
 
-                    {activeSuggestion && chatMessages.length >= 2 && (
+                    {activeSuggestion && chatMessages.length >= 2 && !isMeetingCapture && (
                       <button
                         type="button"
                         onClick={onChatConvertToNodes}

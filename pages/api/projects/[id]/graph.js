@@ -22,6 +22,22 @@ export default async function handler(req, res) {
           stage: "research-diverge",
           updatedAt: timestamp,
         },
+        meetingMemory: {
+          rawChunks: [],
+          working: {
+            activeIssueNodeIds: [],
+            unresolvedQuestionNodeIds: [],
+            recentDecisionNodeIds: [],
+            repeatedIssueKeys: [],
+            lastUpdatedAt: "",
+          },
+          executive: {
+            currentDirection: "",
+            unresolvedAreas: [],
+            nextStepImplications: [],
+            lastUpdatedAt: "",
+          },
+        },
       });
     }
     return res.status(200).json(payload);
