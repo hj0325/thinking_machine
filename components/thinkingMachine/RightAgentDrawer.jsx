@@ -13,6 +13,7 @@ import {
 import ContextMiniCard from "@/components/thinkingMachine/cards/ContextMiniCard";
 import NodeDetailCard from "@/components/thinkingMachine/cards/NodeDetailCard";
 import CandidateGraphCard from "@/components/thinkingMachine/cards/CandidateGraphCard";
+import AlignmentSummaryCard from "@/components/thinkingMachine/cards/AlignmentSummaryCard";
 const DRAWER_TOP_SAFE_ZONE = 4;
 
 function MicButtonIcon() {
@@ -51,6 +52,7 @@ export default function RightAgentDrawer({
   selectedNode,
   linkedNodes,
   candidateGraph,
+  alignmentSummary,
   currentUserRole = "owner",
   chatMessages,
   chatInput,
@@ -365,6 +367,7 @@ export default function RightAgentDrawer({
                         onSetVisibility={(nextVisibility) => onSetNodeVisibility?.(selectedNode?.id, nextVisibility)}
                         onClearSelection={onClearSelectedNode}
                       />
+                      <AlignmentSummaryCard selectedNode={selectedNode} summary={alignmentSummary} />
 
                       {activeSuggestion ? (
                         <div className={`rounded-[14px] border ${categoryColors.border} ${categoryColors.tint} px-3 py-3`}>

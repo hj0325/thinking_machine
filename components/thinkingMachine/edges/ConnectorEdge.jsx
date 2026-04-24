@@ -2,6 +2,7 @@
 
 import { BaseEdge } from "reactflow";
 import { getTypeMeta } from "@/lib/thinkingMachine/nodeMeta";
+import { getAlignmentVisualMeta } from "@/lib/thinkingMachine/reasoningAlignment";
 
 const DEFAULT_LINE_COLOR = "#AAF17B";
 const DEFAULT_LINE_WIDTH = 1.65;
@@ -287,11 +288,11 @@ export default function ConnectorEdge({
   const targetOffsetY = toFiniteNumber(data?.targetOffsetY, 0);
   const clearanceX = toFiniteNumber(data?.clearanceX, DEFAULT_CLEARANCE);
   const laneGap = toFiniteNumber(data?.laneGap, DEFAULT_LANE_GAP);
-  // 선 색상은 항상 디자인 토큰(DEFAULT_LINE_COLOR)을 사용해
-  // 코드 수정 시 기존 엣지도 즉시 색상이 갱신되도록 한다.
-  const lineColor = DEFAULT_LINE_COLOR;
+  const alignmentMeta = getAlignmentVisualMeta(data?.alignmentState);
+  const lineColor = data?.alignmentStroke || alignmentMeta.stroke || DEFAULT_LINE_COLOR;
   const lineWidth = toFiniteNumber(data?.lineWidth, DEFAULT_LINE_WIDTH);
   const curveTension = toFiniteNumber(data?.curveTension, DEFAULT_CURVE_TENSION);
+  const lineDash = data?.alignmentLineDash || alignmentMeta.lineDash;
 
   const sy = sourceY + sourceOffsetY;
   const ty = targetY + targetOffsetY;
@@ -300,6 +301,7 @@ export default function ConnectorEdge({
   const startPoint = points[0] ?? { x: sourceX, y: sy };
   const endPoint = points[points.length - 1] ?? { x: targetX, y: ty };
   const label = typeof data?.label === "string" ? data.label.replace(/_/g, " ") : "";
+  const alignmentLabel = typeof data?.alignmentLabel === "string" ? data.alignmentLabel : alignmentMeta.label;
   const labelAnchor = getLabelAnchor(points, sourceX, sy, targetX, ty);
   const labelX = labelAnchor.x;
   const labelY = labelAnchor.y;
@@ -321,6 +323,7 @@ export default function ConnectorEdge({
           strokeLinejoin: "round",
           opacity: isSelected ? 0.95 : 0.82,
           filter: "blur(0.35px)",
+          strokeDasharray: lineDash,
         }}
       />
       <BaseEdge
@@ -335,6 +338,7 @@ export default function ConnectorEdge({
           filter: isSelected
             ? "drop-shadow(0 1px 1px rgba(15, 23, 42, 0.10))"
             : "drop-shadow(0 1px 1px rgba(15, 23, 42, 0.08))",
+          strokeDasharray: lineDash,
         }}
       />
       <circle
@@ -353,24 +357,37 @@ export default function ConnectorEdge({
         stroke={isSelected ? "rgba(255,255,255,0.92)" : "rgba(255,255,255,0.68)"}
         strokeWidth="0.85"
       />
-      {label ? (
+      {label || alignmentLabel ? (
         <foreignObject
           width={112}
-          height={24}
+          height={label && alignmentLabel ? 42 : 24}
           x={labelX - 56}
-          y={labelY - 12}
+          y={labelY - (label && alignmentLabel ? 18 : 12)}
           requiredExtensions="http://www.w3.org/1999/xhtml"
         >
-          <div className="flex h-full w-full items-center justify-center">
-            <span
-              className="rounded-full border border-white/40 px-2 py-1 text-[9px] font-semibold capitalize tracking-[-0.01em] text-slate-700 shadow-sm backdrop-blur-sm"
-              style={{
-                backgroundColor: `${sourceTypeMeta.color}${isSelected ? "D9" : "B3"}`,
-                opacity: isSelected ? 0.98 : 0.92,
-              }}
-            >
-              {label}
-            </span>
+          <div className="flex h-full w-full flex-col items-center justify-center gap-1">
+            {label ? (
+              <span
+                className="rounded-full border border-white/40 px-2 py-1 text-[9px] font-semibold capitalize tracking-[-0.01em] text-slate-700 shadow-sm backdrop-blur-sm"
+                style={{
+                  backgroundColor: `${sourceTypeMeta.color}${isSelected ? "D9" : "B3"}`,
+                  opacity: isSelected ? 0.98 : 0.92,
+                }}
+              >
+                {label}
+              </span>
+            ) : null}
+            {alignmentLabel ? (
+              <span
+                className="rounded-full border border-white/60 px-2 py-0.5 text-[8px] font-semibold tracking-[-0.01em] text-slate-600 shadow-sm backdrop-blur-sm"
+                style={{
+                  backgroundColor: data?.alignmentLabelBackground || alignmentMeta.labelBackground,
+                  opacity: isSelected ? 0.98 : 0.94,
+                }}
+              >
+                {alignmentLabel}
+              </span>
+            ) : null}
           </div>
         </foreignObject>
       ) : null}

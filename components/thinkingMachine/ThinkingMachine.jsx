@@ -11,7 +11,7 @@ import NodeMap from "./NodeMap";
 import LeftTeamContextPanel from "./LeftTeamContextPanel";
 import RightAgentDrawer from "./RightAgentDrawer";
 import TopBar from "./TopBar";
-import { toConnectorEdges } from "@/lib/thinkingMachine/connectorEdges";
+import { decorateConnectorEdges, toConnectorEdges } from "@/lib/thinkingMachine/connectorEdges";
 import { toReactFlowNode } from "@/lib/thinkingMachine/reactflowTransforms";
 import { computeNodeBounds, relayoutTopLevelThinkingNodes, shiftClusterRightOfExisting } from "@/lib/thinkingMachine/graphMerge";
 import { useAdminMode } from "@/hooks/useAdminMode";
@@ -24,6 +24,7 @@ import { useRightDrawerChat } from "@/components/thinkingMachine/hooks/useRightD
 import { fetchProjectGraph, saveProjectGraph, summarizeTeamContext, updateProject } from "@/lib/thinkingMachine/apiClient";
 import { hydrateProjectEdges, hydrateProjectNodes, serializeProjectGraph } from "@/lib/thinkingMachine/projectGraph";
 import { readCurrentUser } from "@/lib/thinkingMachine/clientUser";
+import { buildReasoningAlignmentAnalysis } from "@/lib/thinkingMachine/reasoningAlignment";
 import {
     getReasoningModeProfile,
     getRoleMeta,
@@ -634,6 +635,22 @@ export default function ThinkingMachine({
         canvasMode,
         currentUserId,
     });
+    const reasoningAlignmentAnalysis = useMemo(
+        () => buildReasoningAlignmentAnalysis({
+            nodes: canvasNodes,
+            edges: canvasEdges,
+            selectedNodeId,
+        }),
+        [canvasEdges, canvasNodes, selectedNodeId]
+    );
+    const decoratedCanvasEdges = useMemo(
+        () => decorateConnectorEdges(canvasEdges, reasoningAlignmentAnalysis),
+        [canvasEdges, reasoningAlignmentAnalysis]
+    );
+    const alignmentSummary = reasoningAlignmentAnalysis?.selectedSummary || {
+        counts: reasoningAlignmentAnalysis?.counts || {},
+        sections: reasoningAlignmentAnalysis?.sections || {},
+    };
 
     useEffect(() => {
         if (selectedNodeId && !visibleCanvasNodeIds.has(selectedNodeId)) {
@@ -919,7 +936,7 @@ export default function ThinkingMachine({
                     <>
                         <NodeMap
                             nodes={canvasNodes}
-                            edges={canvasEdges}
+                            edges={decoratedCanvasEdges}
                             onNodesChange={filteredOnNodesChange}
                             onEdgesChange={onEdgesChange}
                             highlightedNodeIds={highlightedNodeIds}
@@ -983,6 +1000,7 @@ export default function ThinkingMachine({
                             selectedNode={selectedNode}
                             linkedNodes={selectedNodeLinkedNodes}
                             candidateGraph={pendingCandidatePreview}
+                            alignmentSummary={alignmentSummary}
                             currentUserRole={effectiveCurrentUserRole}
                             projectLastUpdated={projectLastUpdated}
                             activityLog={activityLog}
