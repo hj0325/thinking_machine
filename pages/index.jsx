@@ -92,25 +92,25 @@ export default function Home() {
   };
 
   return (
-    <main className="relative h-dvh overflow-hidden bg-[#0a0f14] text-slate-100">
+    <main className="relative h-dvh overflow-hidden bg-[#F3F8F8] text-slate-100">
       <Script
         src="https://accounts.google.com/gsi/client"
         strategy="afterInteractive"
         onLoad={() => setGoogleScriptReady(true)}
         onError={() => setErrorMessage("Unable to load Google sign-in script.")}
       />
-      <div className="pointer-events-none absolute inset-0 z-0 bg-[#0a0f14]" />
-      <div className="pointer-events-none absolute inset-0 z-8 opacity-90">
+      <div className="pointer-events-none absolute inset-0 z-0 bg-[#F3F8F8]" />
+      <div className="pointer-events-none absolute inset-0 z-8 opacity-30">
         <ColorBends
-          colors={["#2effa7", "#9affcf", "#5dffb9"]}
+          colors={["#7BA592", "#8FDDAF", "#349B6D73", "#9DE7CB", "#349B6D73", "#76D7A1"]}
           rotation={100}
-          speed={0.2}
+          speed={0.32}
           scale={1}
           frequency={1}
           warpStrength={1}
           mouseInfluence={1}
           parallax={0.5}
-          noise={0.08}
+          noise={0}
           transparent
         />
       </div>
@@ -135,18 +135,18 @@ export default function Home() {
           transition={{ duration: 0.6, ease: "easeOut" }}
           className="select-none text-center caret-transparent"
         >
-          <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3.5 py-1 text-[10px] text-slate-200/85 backdrop-blur">
-            <Sparkles className="h-3.5 w-3.5 text-slate-200/80" />
+          <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-white/10 bg-white px-3.5 py-1 text-[10px] text-[#7BA592] shadow-[0_8px_24px_rgba(123,165,146,0.18)] backdrop-blur">
+            <Sparkles className="h-3.5 w-3.5 text-[#7BA592]" />
             Visual node program
           </div>
-          <h1 className="mt-6 text-5xl font-light tracking-[-0.04em] text-white sm:text-6xl">
+          <h1 className="mt-6 text-5xl font-light tracking-[-0.04em] text-[#628C79] sm:text-6xl">
             Visual
             <br />
             Thinking
             <br />
             Machine
           </h1>
-          <p className="mt-4 text-sm text-slate-300/90 sm:text-base">
+          <p className="mt-4 text-sm text-[#628C79] sm:text-base">
             Transform ideas into visual thinking flow for teams.
           </p>
         </motion.div>
@@ -162,12 +162,12 @@ export default function Home() {
               <form onSubmit={handleLogin} className="space-y-3">
                 <label className="block">
                   <div className="relative">
-                    <Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-300" />
+                    <Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#A8A8A8]" />
                     <input
                       type="email"
                       value={email}
                       onChange={(event) => setEmail(event.target.value)}
-                      className="w-full rounded-2xl border border-white/25 bg-white/20 py-2.5 pl-11 pr-4 text-sm text-white outline-none transition placeholder:text-slate-300 focus:border-white/35 focus:bg-white/28"
+                      className="w-full rounded-2xl border border-white/25 bg-white/[0.85] py-2.5 pl-11 pr-4 text-sm text-[#A8A8A8] outline-none transition placeholder:text-[#A8A8A8] focus:border-white/35 focus:bg-white/[0.85]"
                       placeholder="you@example.com"
                       autoComplete="email"
                     />
@@ -176,19 +176,19 @@ export default function Home() {
 
                 <label className="block">
                   <div className="relative">
-                    <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-300" />
+                    <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#A8A8A8]" />
                     <input
                       type={showPassword ? "text" : "password"}
                       value={password}
                       onChange={(event) => setPassword(event.target.value)}
-                      className="w-full rounded-2xl border border-white/25 bg-white/20 py-2.5 pl-11 pr-12 text-sm text-white outline-none transition placeholder:text-slate-300 focus:border-white/35 focus:bg-white/28"
+                      className="w-full rounded-2xl border border-white/25 bg-white/[0.85] py-2.5 pl-11 pr-12 text-sm text-[#A8A8A8] outline-none transition placeholder:text-[#A8A8A8] focus:border-white/35 focus:bg-white/[0.85]"
                       placeholder="••••••••"
                       autoComplete="current-password"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword((value) => !value)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 p-0 text-slate-200 transition hover:text-white"
+                      className="absolute right-4 top-1/2 -translate-y-1/2 p-0 text-[#A8A8A8] transition hover:text-[#A8A8A8]"
                       aria-label={showPassword ? "Hide password" : "Show password"}
                     >
                       <Eye className="h-4 w-4" />
@@ -205,7 +205,7 @@ export default function Home() {
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     type="submit"
-                    className="group relative w-full overflow-hidden rounded-2xl bg-[#D7D7D7] px-3 py-2.5 text-sm font-semibold text-slate-950 shadow-[0_18px_55px_rgba(15,23,42,0.12)] transition hover:bg-[#8DFFE0]"
+                    className="group relative w-full overflow-hidden rounded-2xl border border-[#7BA592]/70 bg-white px-3 py-2.5 text-sm font-semibold text-[#484848] shadow-[0_18px_55px_rgba(15,23,42,0.12)] transition hover:bg-white"
                   >
                     Go
                   </button>
@@ -214,7 +214,7 @@ export default function Home() {
                     type="button"
                     onClick={handleGoogleLogin}
                     aria-label="Google login"
-                    className="inline-flex w-full items-center justify-center rounded-2xl border border-black/10 bg-[#D7D7D7] px-3 py-2.5 text-sm font-semibold text-slate-950 shadow-[0_18px_55px_rgba(15,23,42,0.10)] transition hover:bg-[#8DFFE0]"
+                    className="inline-flex w-full items-center justify-center rounded-2xl border border-[#7BA592]/70 bg-white px-3 py-2.5 text-sm font-semibold text-slate-950 shadow-[0_18px_55px_rgba(15,23,42,0.10)] transition hover:bg-white"
                   >
                     <svg
                       width="18"

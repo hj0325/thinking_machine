@@ -1,9 +1,11 @@
 import { startTransition, useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/router";
 import { createProject as createProjectRequest, fetchProjects } from "@/lib/thinkingMachine/apiClient";
 import { readCurrentUser } from "@/lib/thinkingMachine/clientUser";
 
 const LOGIN_STORAGE_KEY = "isLoggedIn";
+const DotGrid = dynamic(() => import("@/components/DotGrid/DotGrid"), { ssr: false });
 
 function formatDate(value) {
   if (!value) return "Just now";
@@ -82,23 +84,51 @@ export default function ProjectsPage() {
 
   if (isLoading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#EFEFEF] text-slate-900">
-        <div className="rounded-3xl border border-black/10 bg-white px-6 py-4 text-sm text-slate-600 shadow-sm">
+      <main className="relative min-h-screen overflow-hidden bg-[#F3F8F8] text-slate-900">
+        <div className="pointer-events-none absolute inset-0 z-0 opacity-10">
+          <DotGrid
+            dotSize={2}
+            gap={10}
+            baseColor="#6d8ea5"
+            activeColor="#cce8ff"
+            proximity={130}
+            shockRadius={260}
+            shockStrength={5}
+            resistance={750}
+            returnDuration={1.5}
+          />
+        </div>
+        <div className="relative z-10 flex min-h-screen items-center justify-center">
+          <div className="rounded-3xl border border-black/10 bg-white px-6 py-4 text-sm text-slate-600 shadow-sm">
           Loading projects...
+          </div>
         </div>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-[#EFEFEF] px-6 py-10 text-slate-900">
-      <div className="mx-auto max-w-5xl">
+    <main className="relative min-h-screen overflow-hidden bg-[#F3F8F8] px-6 py-10 text-slate-900">
+      <div className="pointer-events-none absolute inset-0 z-0 opacity-10">
+        <DotGrid
+          dotSize={2}
+          gap={10}
+          baseColor="#6d8ea5"
+          activeColor="#cce8ff"
+          proximity={130}
+          shockRadius={260}
+          shockStrength={5}
+          resistance={750}
+          returnDuration={1.5}
+        />
+      </div>
+      <div className="relative z-10 mx-auto max-w-5xl">
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <div className="text-[12px] font-semibold uppercase tracking-[0.28em] text-sky-700">
+            <div className="text-[12px] font-semibold uppercase tracking-[0.28em] text-[#558A72]">
               Thinking Machine
             </div>
-            <h1 className="mt-3 text-4xl font-semibold tracking-[-0.03em]">Projects</h1>
+            <h1 className="mt-3 text-4xl font-semibold tracking-[-0.03em] text-[#3C3C3C]">Projects</h1>
             <p className="mt-2 text-sm text-slate-600">
               Open an existing project or create a new one to continue.
             </p>
@@ -129,10 +159,10 @@ export default function ProjectsPage() {
                 onClick={() => handleOpenProject(project.id)}
                 className="rounded-[28px] border border-black/10 bg-white p-5 text-left shadow-[0_24px_80px_rgba(15,23,42,0.08)] transition hover:-translate-y-0.5 hover:bg-slate-50"
               >
-                <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-sky-700">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#558A72]">
                   Project
                 </div>
-                <div className="-translate-y-[8px] mt-3 line-clamp-2 text-xl font-semibold tracking-[-0.03em] text-slate-900">
+                <div className="-translate-y-[8px] mt-3 line-clamp-2 text-xl font-semibold tracking-[-0.03em] text-[#3C3C3C]">
                   {project.title || "Untitled Project"}
                 </div>
                 <div className="mt-6 text-xs text-slate-600">

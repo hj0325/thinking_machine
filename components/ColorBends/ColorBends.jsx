@@ -15,6 +15,7 @@ uniform float uSpeed;
 uniform vec2 uRot;
 uniform int uColorCount;
 uniform vec3 uColors[MAX_COLORS];
+uniform float uColorAlphas[MAX_COLORS];
 uniform int uTransparent;
 uniform float uScale;
 uniform float uFrequency;
@@ -57,8 +58,8 @@ void main() {
       float m1 = length(warped + sin(5.0 * warped.y * uFrequency - 3.0 * t + float(i)) / 4.0);
       float m = mix(m0, m1, kMix);
       float w = 1.0 - exp(-6.0 / exp(6.0 * m));
-      sumCol += uColors[i] * w;
-      cover = max(cover, w);
+      sumCol += uColors[i] * (w * uColorAlphas[i]);
+      cover = max(cover, w * uColorAlphas[i]);
     }
     col = clamp(sumCol, 0.0, 1.0);
     a = uTransparent > 0 ? cover : 1.0;
@@ -70,7 +71,13 @@ void main() {
     col = clamp(col, 0.0, 1.0);
   }
 
-  vec3 rgb = (uTransparent > 0) ? col * a : col;
+  vec3 highlightTint = vec3(157.0 / 255.0, 231.0 / 255.0, 203.0 / 255.0);
+  float highlight = smoothstep(0.72, 0.92, max(max(col.r, col.g), col.b));
+  col = mix(col, highlightTint, highlight);
+  a = max(a, highlight * 0.72);
+
+  float colorAlpha = mix(0.88, 1.0, a);
+  vec3 rgb = (uTransparent > 0) ? col * colorAlpha : col;
   gl_FragColor = vec4(rgb, a);
 }
 `;
@@ -116,6 +123,7 @@ export default function ColorBends({
 
     const geometry = new THREE.PlaneGeometry(2, 2);
     const uColorsArray = Array.from({ length: MAX_COLORS }, () => new THREE.Vector3(0, 0, 0));
+    const uColorAlphasArray = Array.from({ length: MAX_COLORS }, () => 1);
     const material = new THREE.ShaderMaterial({
       vertexShader: vert,
       fragmentShader: frag,
@@ -126,6 +134,7 @@ export default function ColorBends({
         uRot: { value: new THREE.Vector2(1, 0) },
         uColorCount: { value: 0 },
         uColors: { value: uColorsArray },
+        uColorAlphas: { value: uColorAlphasArray },
         uTransparent: { value: transparent ? 1 : 0 },
         uScale: { value: scale },
         uFrequency: { value: frequency },
@@ -226,20 +235,42 @@ export default function ColorBends({
     material.uniforms.uParallax.value = parallax;
     material.uniforms.uNoise.value = noise;
 
-    const toVec3 = (hex) => {
+    const toColorData = (hex) => {
       const h = hex.replace("#", "").trim();
-      const v =
-        h.length === 3
-          ? [parseInt(h[0] + h[0], 16), parseInt(h[1] + h[1], 16), parseInt(h[2] + h[2], 16)]
-          : [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
-      return new THREE.Vector3(v[0] / 255, v[1] / 255, v[2] / 255);
+      if (h.length === 3 || h.length === 4) {
+        const rgb = [h[0] + h[0], h[1] + h[1], h[2] + h[2]];
+        const alpha = h.length === 4 ? parseInt(h[3] + h[3], 16) / 255 : 1;
+        return {
+          color: new THREE.Vector3(
+            parseInt(rgb[0], 16) / 255,
+            parseInt(rgb[1], 16) / 255,
+            parseInt(rgb[2], 16) / 255,
+          ),
+          alpha,
+        };
+      }
+
+      const alpha = h.length === 8 ? parseInt(h.slice(6, 8), 16) / 255 : 1;
+      return {
+        color: new THREE.Vector3(
+          parseInt(h.slice(0, 2), 16) / 255,
+          parseInt(h.slice(2, 4), 16) / 255,
+          parseInt(h.slice(4, 6), 16) / 255,
+        ),
+        alpha,
+      };
     };
 
-    const arr = (colors || []).filter(Boolean).slice(0, MAX_COLORS).map(toVec3);
+    const arr = (colors || []).filter(Boolean).slice(0, MAX_COLORS).map(toColorData);
     for (let i = 0; i < MAX_COLORS; i++) {
       const vec = material.uniforms.uColors.value[i];
-      if (i < arr.length) vec.copy(arr[i]);
-      else vec.set(0, 0, 0);
+      if (i < arr.length) {
+        vec.copy(arr[i].color);
+        material.uniforms.uColorAlphas.value[i] = arr[i].alpha;
+      } else {
+        vec.set(0, 0, 0);
+        material.uniforms.uColorAlphas.value[i] = 1;
+      }
     }
     material.uniforms.uColorCount.value = arr.length;
 
@@ -248,18 +279,27 @@ export default function ColorBends({
   }, [rotation, speed, scale, frequency, warpStrength, mouseInfluence, parallax, noise, colors, transparent]);
 
   useEffect(() => {
-    const handlePointerMove = (e) => {
+    const updatePointer = (clientX, clientY) => {
       const container = containerRef.current;
       if (!container) return;
       const rect = container.getBoundingClientRect();
-      const x = ((e.clientX - rect.left) / (rect.width || 1)) * 2 - 1;
-      const y = -(((e.clientY - rect.top) / (rect.height || 1)) * 2 - 1);
+      const x = ((clientX - rect.left) / (rect.width || 1)) * 2 - 1;
+      const y = -(((clientY - rect.top) / (rect.height || 1)) * 2 - 1);
       pointerTargetRef.current.set(x, y);
     };
 
+    const handlePointerMove = (e) => updatePointer(e.clientX, e.clientY);
+    const handleMouseMove = (e) => updatePointer(e.clientX, e.clientY);
+    const handleMouseEnter = (e) => updatePointer(e.clientX, e.clientY);
+
     window.addEventListener("pointermove", handlePointerMove, { passive: true });
+    window.addEventListener("mousemove", handleMouseMove, { passive: true });
+    window.addEventListener("mouseenter", handleMouseEnter, { passive: true });
+
     return () => {
       window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseenter", handleMouseEnter);
     };
   }, []);
 
