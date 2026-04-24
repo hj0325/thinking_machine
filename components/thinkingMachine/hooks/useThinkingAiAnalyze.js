@@ -2,45 +2,14 @@ import { useCallback } from "react";
 import { analyze } from "@/lib/thinkingMachine/apiClient";
 import { toConnectorEdges } from "@/lib/thinkingMachine/connectorEdges";
 import { toReactFlowNode } from "@/lib/thinkingMachine/reactflowTransforms";
+import { getNodeSnapshot } from "@/components/thinkingMachine/utils/graphSnapshots";
+import { mergeSuggestionUnique } from "@/components/thinkingMachine/utils/suggestionUtils";
 import {
   relayoutTopLevelThinkingNodes,
   shiftClusterRelativeToAnchor,
   shiftClusterRightOfExisting,
 } from "@/lib/thinkingMachine/graphMerge";
 import { normalizeRelationLabel, normalizeVisibility } from "@/lib/thinkingMachine/nodeMeta";
-
-function getNodeSnapshot(node, edges = []) {
-  if (!node) return null;
-  return {
-    id: node.id,
-    title: node?.data?.title || "",
-    content: node?.data?.content || "",
-    category: node?.data?.category || "",
-    phase: node?.data?.phase || "",
-    visibility: normalizeVisibility(node?.data?.visibility),
-    linkedNodeIds: (Array.isArray(edges) ? edges : [])
-      .filter((edge) => edge?.source === node.id || edge?.target === node.id)
-      .map((edge) => (edge.source === node.id ? edge.target : edge.source))
-      .filter(Boolean),
-  };
-}
-
-function mergeSuggestionUnique(prev, nextSuggestion) {
-  if (!nextSuggestion) return prev;
-  const key = `${String(nextSuggestion.category || "").toLowerCase()}::${String(nextSuggestion.title || "")
-    .trim()
-    .toLowerCase()}::${String(nextSuggestion.content || "").trim().toLowerCase()}`;
-  const existingIndex = prev.findIndex((item) => {
-    const existingKey = `${String(item?.category || "").toLowerCase()}::${String(item?.title || "")
-      .trim()
-      .toLowerCase()}::${String(item?.content || "").trim().toLowerCase()}`;
-    return existingKey === key;
-  });
-  if (existingIndex === -1) return [nextSuggestion, ...prev];
-  const clone = [...prev];
-  clone.splice(existingIndex, 1);
-  return [nextSuggestion, ...clone];
-}
 
 export function useThinkingAiAnalyze({
   nodes,

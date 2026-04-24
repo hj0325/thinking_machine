@@ -1,4 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  buildAttachedNodesContext,
+  getPointerClientPoint,
+  isPointInRect,
+  isPointInRightRegion,
+  isPointNearRect,
+} from "@/components/thinkingMachine/utils/chatDropGeometry";
 
 export function useGhostDragToChat({
   nodes,
@@ -22,58 +29,11 @@ export function useGhostDragToChat({
   const didShowGhostRef = useRef(false);
   const ghostCaptureRef = useRef(false);
 
-  const makeAttachedContextId = (ids) => {
-    const base = Array.isArray(ids) ? ids.join(",") : "";
-    return `attached-${Date.now()}-${base.length}-${Math.random().toString(16).slice(2, 6)}`;
-  };
-
-  const buildAttachedNodesContext = (selected) => {
-    const safeSelected = Array.isArray(selected) ? selected : [];
-    const items = safeSelected
-      .map((n) => ({
-        id: n?.id,
-        title: n?.data?.title,
-        content: n?.data?.content,
-        category: n?.data?.category,
-        phase: n?.data?.phase,
-        sourceType: n?.data?.sourceType,
-        visibility: n?.data?.visibility,
-        confidence: n?.data?.confidence,
-      }))
-      .filter((n) => typeof n.id === "string" && n.id && typeof n.title === "string" && n.title.trim().length > 0);
-
-    return {
-      id: makeAttachedContextId(items.map((i) => i.id)),
-      type: "attachedNodes",
-      title: items.length === 1 ? "Attached node" : `Attached nodes (${items.length})`,
-      content: "Use these nodes as the primary context for this chat.",
-      category: "Insight",
-      phase: "Problem",
-      sourceType: "mixed",
-      visibility: "shared",
-      confidence: "medium",
-      attached_nodes: items,
-    };
-  };
-
-  const getPointerClientPoint = (event) => {
-    const e = event?.nativeEvent ?? event;
-    const touch = e?.touches?.[0] || e?.changedTouches?.[0];
-    if (touch) return { x: touch.clientX, y: touch.clientY };
-    if (typeof e?.clientX === "number" && typeof e?.clientY === "number") return { x: e.clientX, y: e.clientY };
-    return null;
-  };
-
   const isPointNearChatButton = (pt) => {
     const el = chatButtonRef.current;
     if (!pt || !el?.getBoundingClientRect) return false;
     const rect = el.getBoundingClientRect();
-    const pad = 28;
-    const left = rect.left - pad;
-    const right = rect.right + pad;
-    const top = rect.top - pad;
-    const bottom = rect.bottom + pad;
-    return pt.x >= left && pt.x <= right && pt.y >= top && pt.y <= bottom;
+    return isPointNearRect(pt, rect, 28);
   };
 
   const getChatDropZoneRect = () => {
@@ -82,17 +42,10 @@ export function useGhostDragToChat({
     return el.getBoundingClientRect();
   };
 
-  const isPointInRect = (pt, rect, pad = 0) => {
-    if (!pt || !rect) return false;
-    return pt.x >= rect.left - pad && pt.x <= rect.right + pad && pt.y >= rect.top - pad && pt.y <= rect.bottom + pad;
-  };
-
   const isPointInChatRegion = (pt) => {
-    if (!pt) return false;
     const width = typeof window !== "undefined" ? window.innerWidth : 0;
-    if (!width) return false;
     // 오른쪽 영역 진입만으로도 Chat 모드가 자연스럽게 열리도록 넓게 잡음
-    return pt.x >= width - 240;
+    return isPointInRightRegion(pt, width, 240);
   };
 
   const isPointInChatAttachZone = (pt) => {

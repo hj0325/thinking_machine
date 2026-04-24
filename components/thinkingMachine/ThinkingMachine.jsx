@@ -11,6 +11,7 @@ import NodeMap from "./NodeMap";
 import LeftTeamContextPanel from "./LeftTeamContextPanel";
 import RightAgentDrawer from "./RightAgentDrawer";
 import TopBar from "./TopBar";
+import { getNodeSnapshot, getRelatedNodeIds } from "@/components/thinkingMachine/utils/graphSnapshots";
 import { decorateConnectorEdges, toConnectorEdges } from "@/lib/thinkingMachine/connectorEdges";
 import { toReactFlowNode } from "@/lib/thinkingMachine/reactflowTransforms";
 import { computeNodeBounds, relayoutTopLevelThinkingNodes, shiftClusterRightOfExisting } from "@/lib/thinkingMachine/graphMerge";
@@ -21,13 +22,15 @@ import { useThinkingCollaboration } from "@/components/thinkingMachine/hooks/use
 import { useThinkingGraphState } from "@/components/thinkingMachine/hooks/useThinkingGraphState";
 import { useThinkingAiAnalyze } from "@/components/thinkingMachine/hooks/useThinkingAiAnalyze";
 import { useRightDrawerChat } from "@/components/thinkingMachine/hooks/useRightDrawerChat";
-import { fetchProjectGraph, ingestMeetingChunk, saveProjectGraph, summarizeTeamContext, updateProject } from "@/lib/thinkingMachine/apiClient";
+import { useProjectGraphSync } from "@/components/thinkingMachine/hooks/useProjectGraphSync";
+import { useChatGraphIngest } from "@/components/thinkingMachine/hooks/useChatGraphIngest";
+import { useMeetingCaptureFlow } from "@/components/thinkingMachine/hooks/useMeetingCaptureFlow";
+import { useTeamContextSummary } from "@/components/thinkingMachine/hooks/useTeamContextSummary";
 import {
     buildMeetingMemoryReadout,
     getDefaultMeetingMemory,
     mergeMeetingMemory,
 } from "@/lib/thinkingMachine/meetingMemory";
-import { hydrateProjectEdges, hydrateProjectNodes, serializeProjectGraph } from "@/lib/thinkingMachine/projectGraph";
 import { readCurrentUser } from "@/lib/thinkingMachine/clientUser";
 import { buildReasoningAlignmentAnalysis } from "@/lib/thinkingMachine/reasoningAlignment";
 import {
@@ -52,30 +55,6 @@ function cubicOut(t) {
     return 1 - Math.pow(1 - t, 3);
 }
 
-function getNodeSnapshot(node, edges = []) {
-    if (!node) return null;
-    const linkedNodeIds = (Array.isArray(edges) ? edges : [])
-        .filter((edge) => edge?.source === node.id || edge?.target === node.id)
-        .map((edge) => (edge.source === node.id ? edge.target : edge.source))
-        .filter(Boolean);
-    return {
-        id: node.id,
-        title: node?.data?.title || "",
-        content: node?.data?.content || "",
-        category: node?.data?.category || "",
-        phase: node?.data?.phase || "",
-        visibility: normalizeVisibility(node?.data?.visibility),
-        linkedNodeIds,
-    };
-}
-
-function getRelatedNodeIds(nodeId, edges = []) {
-    return (Array.isArray(edges) ? edges : [])
-        .filter((edge) => edge?.source === nodeId || edge?.target === nodeId)
-        .map((edge) => (edge.source === nodeId ? edge.target : edge.source))
-        .filter(Boolean);
-}
-
 export default function ThinkingMachine({
     projectId = "",
     initialProjectTitle = "Thinking Machine",
@@ -96,7 +75,11 @@ export default function ThinkingMachine({
     const [selectedNodeId, setSelectedNodeId] = useState(null);
     const [pendingChatCandidateGraph, setPendingChatCandidateGraph] = useState(null);
     const [hasStartedInput, setHasStartedInput] = useState(false);
-    const [currentUser, setCurrentUser] = useState(initialCurrentUser || null);
+    const [currentUser] = useState(() => {
+        if (initialCurrentUser) return initialCurrentUser;
+        if (typeof window !== "undefined") return readCurrentUser();
+        return null;
+    });
     const [isGraphHydrating, setIsGraphHydrating] = useState(true);
     const [selectedTeamMemberId, setSelectedTeamMemberId] = useState(null);
     const [selectedActivityEventId, setSelectedActivityEventId] = useState(null);
@@ -107,7 +90,8 @@ export default function ThinkingMachine({
     const [meetingMemory, setMeetingMemory] = useState(() => getDefaultMeetingMemory());
     const [meetingCaptureSummary, setMeetingCaptureSummary] = useState(null);
     const [isMeetingCaptureLoading, setIsMeetingCaptureLoading] = useState(false);
-    const meetingSessionIdRef = useRef(`meeting-${Date.now()}`);
+    const [meetingSessionIdValue] = useState(() => `meeting-${Date.now()}`);
+    const meetingSessionIdRef = useRef(meetingSessionIdValue);
     const lastSavedGraphRef = useRef("");
     const lastSyncedTitleRef = useRef(initialProjectTitle);
 
@@ -115,16 +99,6 @@ export default function ThinkingMachine({
         storageKey: ADMIN_MODE_STORAGE_KEY,
         hintDismissedKey: ADMIN_HINT_DISMISSED_KEY,
     });
-
-    useEffect(() => {
-        if (initialCurrentUser) {
-            setCurrentUser(initialCurrentUser);
-            return;
-        }
-        if (typeof window !== "undefined") {
-            setCurrentUser(readCurrentUser());
-        }
-    }, [initialCurrentUser]);
 
     const currentUserId = currentUser?.id || MOCK_CURRENT_USER_ID;
     const currentUserName = currentUser?.name || "You";
@@ -175,6 +149,10 @@ export default function ThinkingMachine({
     // Chat state (Drawer Chat primary + optional legacy dialog fallback)
     const [, setAttachedNodes] = useState([]); // [{id,title,content,category,phase,sourceType,visibility,confidence}]
     const reactFlowRef = useRef(null);
+    const previewNodesFromChatRef = useRef(null);
+    const handlePreviewNodesFromChatProxy = useCallback((...args) => {
+        return previewNodesFromChatRef.current?.(...args);
+    }, []);
 
     const {
         activeSuggestion,
@@ -192,7 +170,7 @@ export default function ThinkingMachine({
     } = useRightDrawerChat({
         suggestions: unseenSuggestions,
         nodes,
-        onPreviewNodesFromChat: handlePreviewNodesFromChat,
+        onPreviewNodesFromChat: handlePreviewNodesFromChatProxy,
         isDrawerOpen,
         setIsDrawerOpen,
         drawerMode,
@@ -286,6 +264,31 @@ export default function ThinkingMachine({
     const currentRoleMeta = getRoleMeta(effectiveCurrentUserRole);
     const normalizedStage = useMemo(() => normalizeReasoningStage(stage), [stage]);
 
+    useProjectGraphSync({
+        projectId,
+        nodes,
+        edges,
+        normalizedStage,
+        meetingMemory,
+        currentUserId,
+        currentUserName,
+        currentUserEmail,
+        currentUserPicture,
+        effectiveCurrentUserRole,
+        isGraphHydrating,
+        setNodes,
+        setEdges,
+        setStage,
+        setMeetingMemory,
+        setProjectTitle,
+        setHasStartedInput,
+        setIsGraphHydrating,
+        refreshProjectCollaborationMeta,
+        lastSavedGraphRef,
+        lastSyncedTitleRef,
+        projectTitle,
+    });
+
     const handleFlowInit = (instance) => {
         reactFlowRef.current = instance;
     };
@@ -321,123 +324,6 @@ export default function ThinkingMachine({
         }
     }, []);
 
-    useEffect(() => {
-        let cancelled = false;
-        const hydrateGraph = async () => {
-            if (!projectId) {
-                setIsGraphHydrating(false);
-                return;
-            }
-            try {
-                const payload = await fetchProjectGraph(projectId);
-                if (cancelled) return;
-                const hydratedNodes = hydrateProjectNodes(payload?.graph?.nodes || []);
-                const hydratedEdges = hydrateProjectEdges(payload?.graph?.edges || []);
-                const nextStage = payload?.graph?.stage || "research-diverge";
-                const nextMeetingMemory = payload?.meetingMemory || getDefaultMeetingMemory();
-                setNodes(hydratedNodes);
-                setEdges(hydratedEdges);
-                setStage(nextStage);
-                setMeetingMemory(nextMeetingMemory);
-                if (payload?.project?.title) {
-                    setProjectTitle(payload.project.title);
-                    lastSyncedTitleRef.current = payload.project.title;
-                }
-                setHasStartedInput(hydratedNodes.some((node) => node?.type === "thinkingNode"));
-                lastSavedGraphRef.current = JSON.stringify(
-                    {
-                        graph: serializeProjectGraph(hydratedNodes, hydratedEdges, nextStage),
-                        meetingMemory: nextMeetingMemory,
-                    }
-                );
-            } catch (error) {
-                console.error("Failed to hydrate project graph:", error);
-            } finally {
-                if (!cancelled) setIsGraphHydrating(false);
-            }
-        };
-        void hydrateGraph();
-        return () => {
-            cancelled = true;
-        };
-    }, [projectId, setEdges, setNodes]);
-
-    useEffect(() => {
-        if (!projectId || !currentUserId || isGraphHydrating) return undefined;
-        const timeoutId = window.setTimeout(async () => {
-            const serialized = serializeProjectGraph(nodes, edges, normalizedStage);
-            const nextKey = JSON.stringify({
-                graph: serialized,
-                meetingMemory,
-            });
-            if (nextKey === lastSavedGraphRef.current) return;
-            try {
-                await saveProjectGraph(projectId, {
-                    ...serialized,
-                    meetingMemory,
-                    actor: {
-                        id: currentUserId,
-                        name: currentUserName,
-                        email: currentUserEmail,
-                        picture: currentUserPicture,
-                        role: effectiveCurrentUserRole,
-                    },
-                });
-                lastSavedGraphRef.current = nextKey;
-            } catch (error) {
-                console.error("Failed to persist graph:", error);
-            }
-        }, 450);
-        return () => window.clearTimeout(timeoutId);
-    }, [
-        currentUserEmail,
-        currentUserId,
-        currentUserName,
-        currentUserPicture,
-        edges,
-        effectiveCurrentUserRole,
-        isGraphHydrating,
-        meetingMemory,
-        nodes,
-        normalizedStage,
-        projectId,
-    ]);
-
-    useEffect(() => {
-        if (!projectId || !currentUserId || isGraphHydrating) return undefined;
-        const nextTitle = String(projectTitle || "").trim() || "Untitled Project";
-        if (nextTitle === lastSyncedTitleRef.current) return undefined;
-        const timeoutId = window.setTimeout(async () => {
-            try {
-                await updateProject(projectId, {
-                    title: nextTitle,
-                    actor: {
-                        id: currentUserId,
-                        name: currentUserName,
-                        email: currentUserEmail,
-                        picture: currentUserPicture,
-                        role: effectiveCurrentUserRole,
-                    },
-                });
-                lastSyncedTitleRef.current = nextTitle;
-                await refreshProjectCollaborationMeta();
-            } catch (error) {
-                console.error("Failed to sync project title:", error);
-            }
-        }, 350);
-        return () => window.clearTimeout(timeoutId);
-    }, [
-        currentUserEmail,
-        currentUserId,
-        currentUserName,
-        currentUserPicture,
-        effectiveCurrentUserRole,
-        isGraphHydrating,
-        projectId,
-        projectTitle,
-        refreshProjectCollaborationMeta,
-    ]);
-
     const handleStageChange = useCallback((nextStage) => {
         const safeStage = normalizeReasoningStage(nextStage);
         if (safeStage === normalizedStage) return;
@@ -455,104 +341,30 @@ export default function ThinkingMachine({
         });
     }, [normalizedStage, recordProjectActivity]);
 
-    // 채팅 대화에서 노드+엣지 추가
-    const handleAddNodesFromChat = useCallback((data, { commitVisibility = "shared" } = {}) => {
-        const incoming = Array.isArray(data?.nodes) ? data.nodes : [];
-        const incomingEdges = Array.isArray(data?.edges) ? data.edges : [];
-        const normalizedIncoming = incoming.map((n) => ({
-            ...n,
-            data: {
-                ...n.data,
-                ownerId: currentUserId,
-                editedBy: currentUserName,
-                visibility: normalizeVisibility(n?.data?.visibility === "candidate" ? commitVisibility : n?.data?.visibility),
-            },
-        }));
-        const rawNewNodes = normalizedIncoming.map((n) => toReactFlowNode(n, null));
-        const seededNodes = nodes.length ? shiftClusterRightOfExisting(nodes, rawNewNodes) : rawNewNodes;
-        const mergedNodes = [...nodes, ...seededNodes];
-        const nextEdges = [...edges, ...toConnectorEdges(incomingEdges, mergedNodes, edges)];
-        const relaidNodes = relayoutTopLevelThinkingNodes(mergedNodes, nextEdges);
-        const insertedIds = new Set(seededNodes.map((node) => node.id));
-
-        setNodes(relaidNodes);
-        setEdges(nextEdges);
-        animateViewportToNodes(relaidNodes.filter((node) => insertedIds.has(node.id)));
-        normalizedIncoming.forEach((node) => {
-            const targetNode = relaidNodes.find((item) => item.id === node.id);
-            const relatedNodeIds = getRelatedNodeIds(node.id, nextEdges);
-            void recordProjectActivity("node_created", {
-                nodeId: node.id,
-                nodeTitle: node?.data?.label,
-                nodeType: node?.data?.category,
-                before: null,
-                after: getNodeSnapshot(targetNode, nextEdges),
-                relatedNodeIds,
-                stage: normalizedStage,
-            });
-            if (node?.data?.category === "Conflict") {
-                void recordProjectActivity("conflict_created", {
-                    nodeId: node.id,
-                    nodeTitle: node?.data?.label,
-                    nodeType: node?.data?.category,
-                    before: null,
-                    after: getNodeSnapshot(targetNode, nextEdges),
-                    relatedNodeIds,
-                    stage: normalizedStage,
-                });
-            }
-        });
-    }, [animateViewportToNodes, currentUserId, currentUserName, edges, nodes, normalizedStage, recordProjectActivity, setEdges, setNodes]);
-
-    function handlePreviewNodesFromChat(data) {
-        const incoming = Array.isArray(data?.nodes) ? data.nodes : [];
-        const incomingEdges = Array.isArray(data?.edges) ? data.edges : [];
-        if (!incoming.length) return;
-
-        // 대화 결과를 별도 후보 카드 없이 바로 그래프에 반영
-        handleAddNodesFromChat(
-            {
-                nodes: incoming.map((n) => ({
-                    ...n,
-                    data: {
-                        ...n.data,
-                        ownerId: currentUserId,
-                        editedBy: currentUserName,
-                        visibility: "candidate",
-                    },
-                })),
-                edges: incomingEdges.map((e) => ({
-                    ...e,
-                    label: normalizeRelationLabel(e?.label),
-                })),
-            },
-            { commitVisibility: "candidate" }
-        );
-
-        // 대화 기반 노드 생성 후에는 다시 입력 모드로 되돌아가도록 컨텍스트 초기화
-        setActiveSuggestion(null);
-        setPendingChatCandidateGraph(null);
-    }
-
-    const handleCommitCandidateNodes = useCallback(() => {
-        if (!pendingChatCandidateGraph) return;
-        handleAddNodesFromChat(pendingChatCandidateGraph, { commitVisibility: "candidate" });
-        setPendingChatCandidateGraph(null);
-        // 대화 기반 후보 노드를 그래프에 반영한 뒤에는 다시 기본 입력 모드로 돌아가도록 컨텍스트 초기화
-        setActiveSuggestion(null);
-    }, [handleAddNodesFromChat, pendingChatCandidateGraph, setActiveSuggestion]);
-
-    const handleCommitCandidateNodesAsPrivate = useCallback(() => {
-        if (!pendingChatCandidateGraph) return;
-        handleAddNodesFromChat(pendingChatCandidateGraph, { commitVisibility: "private" });
-        setPendingChatCandidateGraph(null);
-        setActiveSuggestion(null);
-    }, [handleAddNodesFromChat, pendingChatCandidateGraph, setActiveSuggestion]);
-
-    const handleDiscardCandidateNodes = useCallback(() => {
-        setPendingChatCandidateGraph(null);
-        setActiveSuggestion(null);
-    }, [setActiveSuggestion]);
+    const {
+        handleAddNodesFromChat,
+        handlePreviewNodesFromChat,
+        handleCommitCandidateNodes,
+        handleCommitCandidateNodesAsPrivate,
+        handleDiscardCandidateNodes,
+        pendingCandidatePreview,
+    } = useChatGraphIngest({
+        nodes,
+        edges,
+        currentUserId,
+        currentUserName,
+        normalizedStage,
+        setNodes,
+        setEdges,
+        setActiveSuggestion,
+        pendingChatCandidateGraph,
+        setPendingChatCandidateGraph,
+        animateViewportToNodes,
+        recordProjectActivity,
+    });
+    useEffect(() => {
+        previewNodesFromChatRef.current = handlePreviewNodesFromChat;
+    }, [handlePreviewNodesFromChat]);
 
     const handleSetNodeVisibility = useCallback((nodeId, nextVisibility) => {
         const normalizedNext = normalizeVisibility(nextVisibility);
@@ -740,14 +552,6 @@ export default function ThinkingMachine({
         setActiveSuggestion(null);
     }, [setActiveSuggestion]);
 
-    const pendingCandidatePreview = useMemo(() => {
-        if (!pendingChatCandidateGraph) return null;
-        return {
-            ...pendingChatCandidateGraph,
-            nodes: pendingChatCandidateGraph.nodes.map((node) => toReactFlowNode(node, null)),
-        };
-    }, [pendingChatCandidateGraph]);
-
     const reasoningModeProfile = useMemo(() => getReasoningModeProfile(normalizedStage), [normalizedStage]);
     const { handleInputSubmit } = useThinkingAiAnalyze({
         nodes,
@@ -775,124 +579,28 @@ export default function ThinkingMachine({
             setIsDrawerOpen(true);
         }
     }, [resetChat, setActiveSuggestion]);
-    const applyMeetingGraphPatch = useCallback((graphPatch = {}) => {
-        const incomingNodes = Array.isArray(graphPatch?.nodes) ? graphPatch.nodes : [];
-        const incomingEdges = Array.isArray(graphPatch?.edges) ? graphPatch.edges : [];
-        if (!incomingNodes.length && !incomingEdges.length) {
-            return {
-                nextNodes: nodes,
-                nextEdges: edges,
-                createdNodeIds: [],
-            };
-        }
-
-        const normalizedIncoming = incomingNodes.map((node) => ({
-            ...node,
-            data: {
-                ...node.data,
-                ownerId: node?.data?.ownerId || currentUserId,
-                editedBy: currentUserName,
-                visibility: normalizeVisibility(node?.data?.visibility),
-            },
-        }));
-        const rawNewNodes = normalizedIncoming.map((node) => toReactFlowNode(node, null));
-        const placedNodes = nodes.length ? shiftClusterRightOfExisting(nodes, rawNewNodes) : rawNewNodes;
-        const mergedNodes = [...nodes, ...placedNodes];
-        const existingEdgeIds = new Set(edges.map((edge) => edge.id));
-        const nextRawEdges = incomingEdges.filter((edge) => edge?.id && !existingEdgeIds.has(edge.id));
-        const nextConnectorEdges = toConnectorEdges(nextRawEdges, mergedNodes, edges);
-        const nextEdges = [...edges, ...nextConnectorEdges];
-        const relaidNodes = relayoutTopLevelThinkingNodes(mergedNodes, nextEdges);
-
-        setNodes(relaidNodes);
-        setEdges(nextEdges);
-
-        return {
-            nextNodes: relaidNodes,
-            nextEdges,
-            createdNodeIds: placedNodes.map((node) => node.id),
-        };
-    }, [currentUserId, currentUserName, edges, nodes, setEdges, setNodes]);
-    const handleMeetingCaptureSubmit = useCallback(async (chunkText) => {
-        if (!projectId) return;
-
-        const trimmedChunk = String(chunkText || "").trim();
-        if (!trimmedChunk) return;
-
-        const existingThinkingNodes = nodes
-            .filter((node) => node?.type === "thinkingNode")
-            .map((node) => ({
-                id: node.id,
-                data: {
-                    title: node?.data?.title || "",
-                    content: node?.data?.content || "",
-                    category: node?.data?.category,
-                    phase: node?.data?.phase,
-                },
-                position: node.position,
-            }));
-
-        setIsMeetingCaptureLoading(true);
-        setTeamContextError("");
-        try {
-            const result = await ingestMeetingChunk(projectId, {
-                projectTitle,
-                chunkText: trimmedChunk,
-                chunkType: "speaker_turn",
-                speakerName: currentUserName,
-                meetingSessionId: meetingSessionIdRef.current,
-                existing_nodes: existingThinkingNodes,
-                meeting_memory: {
-                    working: {
-                        activeIssueTitles: meetingMemoryReadout.activeIssues.map((item) => item.title),
-                        unresolvedQuestions: meetingMemoryReadout.unresolvedQuestions.map((item) => item.title),
-                        decisionCandidates: meetingMemoryReadout.decisionCandidates.map((item) => item.title),
-                        repeatedIssueKeys: meetingMemoryReadout.repeatedIssues,
-                    },
-                    executive: {
-                        currentDirection: meetingMemoryReadout.currentDirection,
-                        unresolvedAreas: meetingMemoryReadout.unresolvedAreas,
-                        nextStepImplications: meetingMemoryReadout.nextStepImplications,
-                    },
-                },
-                stage: normalizedStage,
-            });
-
-            const mergeResult = applyMeetingGraphPatch(result?.graphPatch || {});
-            const nextMeetingMemory = mergeMeetingMemory(meetingMemory, result?.memoryPatch || {});
-            setMeetingMemory(nextMeetingMemory);
-            setMeetingCaptureSummary(result?.meetingSummary || null);
-            setIsTeamContextPanelOpen(true);
-
-            const focusIds = result?.meetingSummary?.linkedNodeIds || mergeResult.createdNodeIds;
-            if (focusIds?.length) {
-                setHighlightedNodeIds(new Set(focusIds));
-                const targetNodes = mergeResult.nextNodes.filter((node) => focusIds.includes(node.id));
-                if (targetNodes.length) animateViewportToNodes(targetNodes);
-            }
-
-            void recordProjectActivity("meeting_chunk_ingested", {
-                nodeTitle: result?.meetingSummary?.chunkSummary || trimmedChunk.slice(0, 80),
-                nodeType: "MeetingChunk",
-                relatedNodeIds: result?.meetingSummary?.linkedNodeIds || [],
-                stage: normalizedStage,
-                metadata: {
-                    chunkType: "speaker_turn",
-                    createdNodeIds: result?.meetingSummary?.createdNodeIds || [],
-                    strengthenedNodeIds: result?.meetingSummary?.strengthenedNodeIds || [],
-                    repeatedIssueKeys: result?.meetingSummary?.repeatedIssueKeys || [],
-                },
-            });
-        } catch (error) {
-            setTeamContextError(
-                error?.response?.data?.error ||
-                error?.message ||
-                "Failed to ingest the meeting chunk."
-            );
-        } finally {
-            setIsMeetingCaptureLoading(false);
-        }
-    }, [animateViewportToNodes, applyMeetingGraphPatch, currentUserName, meetingMemory, meetingMemoryReadout.activeIssues, meetingMemoryReadout.currentDirection, meetingMemoryReadout.decisionCandidates, meetingMemoryReadout.nextStepImplications, meetingMemoryReadout.repeatedIssues, meetingMemoryReadout.unresolvedAreas, meetingMemoryReadout.unresolvedQuestions, nodes, normalizedStage, projectId, projectTitle, recordProjectActivity]);
+    const { handleMeetingCaptureSubmit } = useMeetingCaptureFlow({
+        projectId,
+        projectTitle,
+        nodes,
+        edges,
+        currentUserId,
+        currentUserName,
+        normalizedStage,
+        meetingMemory,
+        meetingMemoryReadout,
+        meetingSessionIdRef,
+        setNodes,
+        setEdges,
+        setMeetingMemory,
+        setMeetingCaptureSummary,
+        setIsMeetingCaptureLoading,
+        setTeamContextError,
+        setIsTeamContextPanelOpen,
+        setHighlightedNodeIds,
+        animateViewportToNodes,
+        recordProjectActivity,
+    });
 
     // 우측 Drawer 하단 입력창 동작:
     // - 기본(컨텍스트 없음)일 때: 사용자 입력을 기반으로 /api/analyze 를 호출해 새 노드 + 제안 생성
@@ -920,17 +628,6 @@ export default function ThinkingMachine({
         await handleDrawerChatSubmit();
     }, [activeSuggestion, chatInput, handleDrawerChatSubmit, handleInputSubmit, handleMeetingCaptureSubmit, inputMode, isAnalyzing, isMeetingCaptureLoading, selectedNode, setChatInput]);
 
-    const filteredTeamActivity = useMemo(() => {
-        const items = Array.isArray(activityLog) ? activityLog : [];
-        if (!selectedTeamMemberId) return items;
-        return items.filter((item) => item?.userId === selectedTeamMemberId);
-    }, [activityLog, selectedTeamMemberId]);
-
-    const selectedActivityItem = useMemo(
-        () => filteredTeamActivity.find((item) => item?.id === selectedActivityEventId) || null,
-        [filteredTeamActivity, selectedActivityEventId]
-    );
-
     const focusNodesByIds = useCallback((nodeIds = []) => {
         const ids = Array.from(new Set((Array.isArray(nodeIds) ? nodeIds : []).filter(Boolean)));
         if (!ids.length) return;
@@ -947,71 +644,27 @@ export default function ThinkingMachine({
             }
         }
     }, [animateViewportToNodes, nodes]);
-
-    const handleSelectTeamMember = useCallback((memberId) => {
-        setSelectedTeamMemberId(memberId);
-        setSelectedActivityEventId(null);
-        setTeamContextSummary(null);
-        setTeamContextError("");
-    }, []);
-
-    const handleSelectActivity = useCallback((item) => {
-        if (!item) return;
-        setSelectedActivityEventId(item.id);
-        if (item?.userId) setSelectedTeamMemberId(item.userId);
-        setTeamContextSummary(null);
-        setTeamContextError("");
-        focusNodesByIds([item.nodeId, ...(item.relatedNodeIds || [])]);
-    }, [focusNodesByIds]);
-
-    const handleExplainTeamContext = useCallback(async () => {
-        const eventScope = selectedActivityItem
-            ? [selectedActivityItem]
-            : filteredTeamActivity.slice(0, 8);
-        const relatedNodeIds = Array.from(
-            new Set(
-                eventScope.flatMap((item) => [item?.nodeId, ...((Array.isArray(item?.relatedNodeIds) ? item.relatedNodeIds : []))])
-                    .filter(Boolean)
-            )
-        );
-        const relatedNodes = nodes
-            .filter((node) => relatedNodeIds.includes(node.id))
-            .map((node) => ({
-                id: node.id,
-                title: node?.data?.title || "",
-                content: node?.data?.content || "",
-                category: node?.data?.category,
-                phase: node?.data?.phase,
-            }));
-
-        setIsTeamContextLoading(true);
-        setTeamContextError("");
-        try {
-            const member = teamMembers.find((item) => item?.id === selectedTeamMemberId) || null;
-            const result = await summarizeTeamContext({
-                projectId,
-                projectTitle,
-                memberId: member?.id || null,
-                memberName: member?.name || "",
-                memberRole: member?.role || "",
-                activityEvents: eventScope,
-                relatedNodes,
-                stage: normalizedStage,
-            });
-            setTeamContextSummary(result);
-            if (Array.isArray(result?.keyNodeIds) && result.keyNodeIds.length) {
-                focusNodesByIds(result.keyNodeIds);
-            }
-        } catch (error) {
-            setTeamContextError(
-                error?.response?.data?.error ||
-                error?.message ||
-                "Failed to summarize the team context."
-            );
-        } finally {
-            setIsTeamContextLoading(false);
-        }
-    }, [filteredTeamActivity, focusNodesByIds, nodes, normalizedStage, projectId, projectTitle, selectedActivityItem, selectedTeamMemberId, teamMembers]);
+    const {
+        filteredTeamActivity,
+        handleSelectTeamMember,
+        handleSelectActivity,
+        handleExplainTeamContext,
+    } = useTeamContextSummary({
+        activityLog,
+        teamMembers,
+        selectedTeamMemberId,
+        setSelectedTeamMemberId,
+        selectedActivityEventId,
+        setSelectedActivityEventId,
+        setTeamContextSummary,
+        setIsTeamContextLoading,
+        setTeamContextError,
+        nodes,
+        focusNodesByIds,
+        normalizedStage,
+        projectId,
+        projectTitle,
+    });
 
     const handleToggleTeamContextPanel = useCallback(() => {
         setIsTeamContextPanelOpen((prev) => !prev);

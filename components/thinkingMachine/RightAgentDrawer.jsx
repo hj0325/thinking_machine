@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, ArrowRight, ArrowUp, GitBranch, Image as ImageIcon, Loader2, Sparkles, StickyNote } from "lucide-react";
+import { ArrowUp, GitBranch, Image as ImageIcon, Loader2, Sparkles, StickyNote } from "lucide-react";
 import {
   getSuggestionTagMeta,
   getTypeMeta,
@@ -10,11 +10,13 @@ import {
   normalizeNodeData,
   normalizeSuggestionTags,
 } from "@/lib/thinkingMachine/nodeMeta";
-import ContextMiniCard from "@/components/thinkingMachine/cards/ContextMiniCard";
 import NodeDetailCard from "@/components/thinkingMachine/cards/NodeDetailCard";
 import CandidateGraphCard from "@/components/thinkingMachine/cards/CandidateGraphCard";
 import AlignmentSummaryCard from "@/components/thinkingMachine/cards/AlignmentSummaryCard";
-const DRAWER_TOP_SAFE_ZONE = 4;
+import DrawerSuggestionCarousel from "@/components/thinkingMachine/drawer/DrawerSuggestionCarousel";
+import DrawerMeetingCaptureSection from "@/components/thinkingMachine/drawer/DrawerMeetingCaptureSection";
+import DrawerChatTranscript from "@/components/thinkingMachine/drawer/DrawerChatTranscript";
+import { getRightDrawerCopy } from "@/components/thinkingMachine/drawer/rightDrawerCopy";
 
 function MicButtonIcon() {
   return (
@@ -108,33 +110,7 @@ export default function RightAgentDrawer({
   const [canScrollSuggestionsLeft, setCanScrollSuggestionsLeft] = useState(false);
   const [canScrollSuggestionsRight, setCanScrollSuggestionsRight] = useState(false);
   const shouldShowDrawerHint = showDrawerHint && !selectedNode;
-  const copy = uiLanguage === "ko"
-    ? {
-        emptyChat: "노드를 선택해 오른쪽으로 드래그한 뒤 놓으면 채팅 컨텍스트로 첨부됩니다.",
-        emptySuggestions: "제안 카드를 선택해 에이전트와 reasoning 흐름을 확장하세요.",
-        emptyWorkspace: "노드 컨텍스트를 첨부해 워크스페이스 대화를 시작하세요.",
-        emptySuggestionState: "제안을 선택해 구조를 검토하거나 확장하세요.",
-        meetingTab: "회의",
-        workspaceInputTab: "워크스페이스",
-        suggestionsTab: "Suggestions",
-        workspaceTab: "Workspace",
-        note: "노트",
-        image: "이미지",
-        voice: "음성",
-      }
-    : {
-        emptyChat: "Select a node, drag it to the right, and drop it to attach it as chat context.",
-        emptySuggestions: "Select a suggestion card to expand the reasoning flow with the agent.",
-        emptyWorkspace: "Attach node context to begin the workspace conversation.",
-        emptySuggestionState: "Select a suggestion to inspect, challenge, or extend the reasoning.",
-        meetingTab: "Meeting",
-        workspaceInputTab: "Workspace",
-        suggestionsTab: "Suggestions",
-        workspaceTab: "Workspace",
-        note: "Note",
-        image: "Image",
-        voice: "Voice",
-      };
+  const copy = getRightDrawerCopy(uiLanguage);
 
   useEffect(() => {
     if (!isOpen || !isChat) return;
@@ -326,59 +302,15 @@ export default function RightAgentDrawer({
             </div>
 
             {shouldShowContextPanel ? (
-              <div className="relative shrink-0 pb-3" style={{ paddingTop: DRAWER_TOP_SAFE_ZONE }}>
-                <div
-                  className="pointer-events-none absolute inset-y-0 left-0 z-[2] w-10"
-                  style={{
-                    background:
-                      "linear-gradient(90deg, rgba(235, 247, 241, 0.92) 0%, rgba(228, 245, 238, 0.62) 52%, rgba(228, 245, 238, 0) 100%)",
-                  }}
-                />
-                <div
-                  className="pointer-events-none absolute inset-y-0 right-0 z-[2] w-10"
-                  style={{
-                    background:
-                      "linear-gradient(270deg, rgba(235, 247, 241, 0.92) 0%, rgba(228, 245, 238, 0.62) 52%, rgba(228, 245, 238, 0) 100%)",
-                  }}
-                />
-
-                <button
-                  type="button"
-                  onClick={() => handleSuggestionScroll("left")}
-                  disabled={!canScrollSuggestionsLeft}
-                  className="pointer-events-auto absolute left-0 top-1/2 z-[3] inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border border-white/80 bg-white/82 text-slate-600 shadow-[0_6px_14px_rgba(0,0,0,0.08)] transition disabled:cursor-default disabled:opacity-35"
-                  aria-label="Scroll suggestions left"
-                >
-                  <ArrowLeft className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSuggestionScroll("right")}
-                  disabled={!canScrollSuggestionsRight}
-                  className="pointer-events-auto absolute right-0 top-1/2 z-[3] inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border border-white/80 bg-white/82 text-slate-600 shadow-[0_6px_14px_rgba(0,0,0,0.08)] transition disabled:cursor-default disabled:opacity-35"
-                  aria-label="Scroll suggestions right"
-                >
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </button>
-
-                <div
-                  ref={contextScrollRef}
-                  className="overflow-x-auto overflow-y-hidden px-8"
-                  style={{ scrollbarWidth: "none" }}
-                >
-                  <div className="flex min-w-max gap-3 pr-2">
-                    {suggestionItems.map((item) => (
-                      <div key={item.id} className="w-[168px] shrink-0">
-                        <ContextMiniCard
-                          item={item}
-                          isActive={activeSuggestion?.id === item.id}
-                          onSelect={onChatContextSelect}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
+              <DrawerSuggestionCarousel
+                suggestionItems={suggestionItems}
+                activeSuggestion={activeSuggestion}
+                contextScrollRef={contextScrollRef}
+                canScrollSuggestionsLeft={canScrollSuggestionsLeft}
+                canScrollSuggestionsRight={canScrollSuggestionsRight}
+                onSuggestionScroll={handleSuggestionScroll}
+                onChatContextSelect={onChatContextSelect}
+              />
             ) : null}
 
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[22px] border border-white/70 bg-[rgba(255,255,255,0.34)] px-3.5 pb-3 pt-4 shadow-[0_14px_28px_rgba(88,116,104,0.09)] backdrop-blur-[16px]">
@@ -404,31 +336,7 @@ export default function RightAgentDrawer({
                       />
                       <AlignmentSummaryCard selectedNode={selectedNode} summary={alignmentSummary} />
                       {isMeetingCapture ? (
-                        <div className="rounded-2xl border border-white/70 bg-white/80 p-3 shadow-sm">
-                          <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Meeting capture</div>
-                          <div className="mt-1 text-[11px] leading-relaxed text-slate-500">
-                            Ingest each speaker turn or note block as a new reasoning chunk. The graph and decision memory update immediately.
-                          </div>
-                          <div className="mt-3 rounded-xl bg-slate-50/90 px-3 py-2.5">
-                            <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">Latest update</div>
-                            <div className="mt-1 text-[12px] text-slate-700">
-                              {meetingCaptureSummary?.chunkSummary || "No meeting chunk has been captured yet."}
-                            </div>
-                            {meetingCaptureSummary ? (
-                              <div className="mt-2 flex flex-wrap gap-1.5">
-                                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
-                                  Created {meetingCaptureSummary.createdNodeIds?.length || 0}
-                                </span>
-                                <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-700">
-                                  Linked {meetingCaptureSummary.linkedNodeIds?.length || 0}
-                                </span>
-                                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-                                  Strengthened {meetingCaptureSummary.strengthenedNodeIds?.length || 0}
-                                </span>
-                              </div>
-                            ) : null}
-                          </div>
-                        </div>
+                        <DrawerMeetingCaptureSection meetingCaptureSummary={meetingCaptureSummary} />
                       ) : null}
 
                       {activeSuggestion ? (
@@ -474,36 +382,12 @@ export default function RightAgentDrawer({
                         onDiscard={onDiscardCandidateNodes}
                       />
 
-                      <div className="flex flex-col gap-2">
-                        {chatMessages.length === 0 && !isChatLoading && activeSuggestion && (
-                          <div className="text-center text-xs text-slate-500">AI is preparing a response...</div>
-                        )}
-                        {chatMessages.map((msg, index) => (
-                          <div
-                            key={`${msg.role}-${index}`}
-                            className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-                          >
-                            <div
-                              className={`max-w-[88%] rounded-[14px] px-3.5 py-2.5 text-xs leading-relaxed shadow-[0_6px_14px_rgba(0,0,0,0.04)] ${
-                                msg.role === "user"
-                                  ? "rounded-br-[8px] bg-[#7BA592] text-white"
-                                  : "rounded-bl-[8px] border border-white/80 bg-white/78 text-slate-700"
-                              }`}
-                            >
-                              {msg.content}
-                            </div>
-                          </div>
-                        ))}
-                        {isChatLoading && (
-                          <div className="flex justify-start">
-                            <div className="inline-flex items-center gap-1.5 rounded-[14px] rounded-bl-[8px] border border-white/80 bg-white/78 px-3 py-2">
-                              <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-500" />
-                              <span className="text-xs text-slate-500">Thinking...</span>
-                            </div>
-                          </div>
-                        )}
-                        <div ref={chatBottomRef} />
-                      </div>
+                      <DrawerChatTranscript
+                        chatMessages={chatMessages}
+                        isChatLoading={isChatLoading}
+                        activeSuggestion={activeSuggestion}
+                        chatBottomRef={chatBottomRef}
+                      />
                     </div>
                   </div>
 

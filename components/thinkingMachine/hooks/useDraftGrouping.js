@@ -12,19 +12,7 @@ import {
   layoutDraftsInGroupGrid,
   layoutThinkingNodesInGroup,
 } from "@/lib/thinkingMachine/draftLayout";
-
-function mergeSuggestionUnique(prev, nextSuggestion) {
-  if (!nextSuggestion) return prev;
-  const key = `${String(nextSuggestion.category || "").toLowerCase()}::${String(nextSuggestion.title || "").trim().toLowerCase()}::${String(nextSuggestion.content || "").trim().toLowerCase()}`;
-  const existingIndex = prev.findIndex((item) => {
-    const existingKey = `${String(item?.category || "").toLowerCase()}::${String(item?.title || "").trim().toLowerCase()}::${String(item?.content || "").trim().toLowerCase()}`;
-    return existingKey === key;
-  });
-  if (existingIndex === -1) return [nextSuggestion, ...prev];
-  const clone = [...prev];
-  clone.splice(existingIndex, 1);
-  return [nextSuggestion, ...clone];
-}
+import { mergeSuggestionUnique } from "@/components/thinkingMachine/utils/suggestionUtils";
 
 export function useDraftGrouping({
   nodes,
