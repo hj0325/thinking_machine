@@ -29,6 +29,12 @@ export default function NodeMap({
     draftHandlers,
     draftSubmittingIds,
     canvasStage = "research-diverge",
+    conflictByNodeId,
+    openConflictNodeId,
+    conflictExplainResultByNodeId,
+    conflictExplainLoadingByNodeId,
+    onToggleConflictPopover,
+    onExplainConflict,
 }) {
 
     const nodeTypes = useMemo(
@@ -48,6 +54,12 @@ export default function NodeMap({
         highlightedNodeIds,
         draftHandlers,
         draftSubmittingIds,
+        conflictByNodeId,
+        openConflictNodeId,
+        conflictExplainResultByNodeId,
+        conflictExplainLoadingByNodeId,
+        onToggleConflictPopover,
+        onExplainConflict,
     });
 
     return (

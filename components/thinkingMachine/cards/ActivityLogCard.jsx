@@ -4,7 +4,9 @@ import { RefreshCcw } from "lucide-react";
 
 const VISIBLE_ACTIVITY_TYPES = new Set([
   "node_shared",
+  "node_promoted_to_team",
   "conflict_created",
+  "node_conflict_detected",
   "node_reviewed",
   "node_agreed",
   "decision_created",
@@ -18,7 +20,9 @@ function shouldDisplayActivityItem(item) {
 function formatActivityTypeLabel(type) {
   const normalized = String(type || "").toLowerCase();
   if (normalized === "node_shared") return "Shared";
+  if (normalized === "node_promoted_to_team") return "To team";
   if (normalized === "conflict_created") return "Conflict raised";
+  if (normalized === "node_conflict_detected") return "Conflict signal";
   if (normalized === "node_reviewed") return "Reviewed";
   if (normalized === "node_agreed") return "Agreed";
   if (normalized === "decision_created") return "Decision added";

@@ -87,7 +87,6 @@ export function useThinkingCollaboration({
     const run = async () => {
       if (!projectId || !currentUserId) return;
       try {
-        await registerCurrentUser();
         if (!cancelled) await refreshProjectCollaborationMeta();
       } catch {
         if (!cancelled) setLastRefreshedAt(new Date().toISOString());
@@ -97,7 +96,7 @@ export function useThinkingCollaboration({
     return () => {
       cancelled = true;
     };
-  }, [currentUserId, projectId, refreshProjectCollaborationMeta, registerCurrentUser]);
+  }, [currentUserId, projectId, refreshProjectCollaborationMeta]);
 
   useEffect(() => {
     if (!projectId) return undefined;

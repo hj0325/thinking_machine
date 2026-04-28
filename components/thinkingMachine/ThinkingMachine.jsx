@@ -33,11 +33,14 @@ import {
 } from "@/lib/thinkingMachine/meetingMemory";
 import { readCurrentUser } from "@/lib/thinkingMachine/clientUser";
 import { buildReasoningAlignmentAnalysis } from "@/lib/thinkingMachine/reasoningAlignment";
+import { buildTeamConflictAnalysis } from "@/lib/thinkingMachine/conflictAnalysis";
+import { explainConflict } from "@/lib/thinkingMachine/apiClient";
 import {
     getReasoningModeProfile,
     getRoleMeta,
     getNextVisibility,
     getPreviousVisibility,
+    normalizeLayerOrigin,
     normalizeReasoningStage,
     normalizeRelationLabel,
     normalizeVisibility,
@@ -94,6 +97,10 @@ export default function ThinkingMachine({
     const meetingSessionIdRef = useRef(meetingSessionIdValue);
     const lastSavedGraphRef = useRef("");
     const lastSyncedTitleRef = useRef(initialProjectTitle);
+    const [openConflictNodeId, setOpenConflictNodeId] = useState(null);
+    const [conflictExplainResultByNodeId, setConflictExplainResultByNodeId] = useState({});
+    const [conflictExplainLoadingByNodeId, setConflictExplainLoadingByNodeId] = useState({});
+    const previousConflictStateRef = useRef({});
 
     const { isAdminMode } = useAdminMode({
         storageKey: ADMIN_MODE_STORAGE_KEY,
@@ -369,6 +376,7 @@ export default function ThinkingMachine({
     const handleSetNodeVisibility = useCallback((nodeId, nextVisibility) => {
         const normalizedNext = normalizeVisibility(nextVisibility);
         let previousVisibility = null;
+        let previousLayerOrigin = "personal";
         let nextNodeTitle = "";
         let nextNodeType = "";
         let beforeSnapshot = null;
@@ -378,9 +386,13 @@ export default function ThinkingMachine({
             prevNodes.map((node) => {
                 if (node.id !== nodeId || node.type !== "thinkingNode") return node;
                 previousVisibility = normalizeVisibility(node.data?.visibility);
+                previousLayerOrigin = normalizeLayerOrigin(node.data?.layerOrigin, previousVisibility);
                 nextNodeTitle = node.data?.title || "";
                 nextNodeType = node.data?.category || "";
                 beforeSnapshot = getNodeSnapshot(node, edges);
+                const isPromotingToTeam =
+                    ["private", "candidate"].includes(previousVisibility) &&
+                    ["shared", "reviewed", "agreed"].includes(normalizedNext);
                 const updated = {
                     ...node,
                     data: {
@@ -388,6 +400,10 @@ export default function ThinkingMachine({
                         ownerId: currentUserId,
                         editedBy: currentUserName,
                         visibility: normalizedNext,
+                        layerOrigin: isPromotingToTeam ? previousLayerOrigin : normalizeLayerOrigin(node.data?.layerOrigin, normalizedNext),
+                        promotedFromVisibility: isPromotingToTeam ? previousVisibility : node.data?.promotedFromVisibility || "",
+                        promotedAt: isPromotingToTeam ? new Date().toISOString() : node.data?.promotedAt || "",
+                        promotedBy: isPromotingToTeam ? currentUserName : node.data?.promotedBy || "",
                     },
                 };
                 const rebuilt = toReactFlowNode({
@@ -403,6 +419,14 @@ export default function ThinkingMachine({
                         sourceType: updated.data?.sourceType,
                         visibility: updated.data?.visibility,
                         confidence: updated.data?.confidence,
+                        layerOrigin: updated.data?.layerOrigin,
+                        promotedFromVisibility: updated.data?.promotedFromVisibility,
+                        promotedAt: updated.data?.promotedAt,
+                        promotedBy: updated.data?.promotedBy,
+                        conflictState: updated.data?.conflictState,
+                        conflictSummary: updated.data?.conflictSummary,
+                        conflictLinkedNodeIds: updated.data?.conflictLinkedNodeIds,
+                        conflictUpdatedAt: updated.data?.conflictUpdatedAt,
                     },
                 }, null);
                 afterSnapshot = getNodeSnapshot({ ...updated, ...rebuilt }, edges);
@@ -425,6 +449,21 @@ export default function ThinkingMachine({
             relatedNodeIds,
             stage: normalizedStage,
         });
+        if (["shared", "reviewed", "agreed"].includes(normalizedNext) && ["private", "candidate"].includes(previousVisibility || "")) {
+            setCanvasMode("team");
+            void recordProjectActivity("node_promoted_to_team", {
+                nodeId,
+                nodeTitle: nextNodeTitle,
+                nodeType: nextNodeType,
+                before: beforeSnapshot,
+                after: afterSnapshot,
+                relatedNodeIds,
+                stage: normalizedStage,
+                metadata: {
+                    promotedFromVisibility: previousVisibility,
+                },
+            });
+        }
         if (normalizedNext === "shared" && previousVisibility !== "shared") {
             void recordProjectActivity("node_shared", {
                 nodeId,
@@ -436,7 +475,7 @@ export default function ThinkingMachine({
                 stage: normalizedStage,
             });
         }
-    }, [currentUserId, currentUserName, edges, normalizedStage, recordProjectActivity, setNodes]);
+    }, [currentUserId, currentUserName, edges, normalizedStage, recordProjectActivity, setCanvasMode, setNodes]);
 
     const handleNodeSelectionChange = useCallback(
         ({ nodes: selectedNodes = [] } = {}) => {
@@ -476,6 +515,13 @@ export default function ThinkingMachine({
         }),
         [canvasEdges, canvasNodes, selectedNodeId]
     );
+    const teamConflictAnalysis = useMemo(
+        () => buildTeamConflictAnalysis({
+            nodes,
+            edges,
+        }),
+        [edges, nodes]
+    );
     const decoratedCanvasEdges = useMemo(
         () => decorateConnectorEdges(canvasEdges, reasoningAlignmentAnalysis),
         [canvasEdges, reasoningAlignmentAnalysis]
@@ -488,6 +534,84 @@ export default function ThinkingMachine({
         () => buildMeetingMemoryReadout(meetingMemory, nodes),
         [meetingMemory, nodes]
     );
+
+    useEffect(() => {
+        setNodes((prevNodes) => {
+            let hasChanges = false;
+            const nextNodes = prevNodes.map((node) => {
+                if (node?.type !== "thinkingNode") return node;
+                const conflictMeta = teamConflictAnalysis?.conflictByNodeId?.[node.id] || null;
+                const nextConflictState = conflictMeta?.state || "none";
+                const nextConflictSummary = conflictMeta?.summary || "";
+                const nextConflictLinkedNodeIds = conflictMeta?.linkedNodeIds || [];
+                const currentConflictLinkedNodeIds = Array.isArray(node?.data?.conflictLinkedNodeIds)
+                    ? node.data.conflictLinkedNodeIds
+                    : [];
+                const idsChanged =
+                    currentConflictLinkedNodeIds.length !== nextConflictLinkedNodeIds.length ||
+                    currentConflictLinkedNodeIds.some((value, index) => value !== nextConflictLinkedNodeIds[index]);
+                const summaryChanged = (node?.data?.conflictSummary || "") !== nextConflictSummary;
+                const stateChanged = (node?.data?.conflictState || "none") !== nextConflictState;
+                if (!idsChanged && !summaryChanged && !stateChanged) return node;
+                hasChanges = true;
+                return {
+                    ...node,
+                    data: {
+                        ...node.data,
+                        conflictState: nextConflictState,
+                        conflictSummary: nextConflictSummary,
+                        conflictLinkedNodeIds: nextConflictLinkedNodeIds,
+                        conflictUpdatedAt: nextConflictState === "none"
+                            ? ""
+                            : node?.data?.conflictUpdatedAt || new Date().toISOString(),
+                    },
+                };
+            });
+            return hasChanges ? nextNodes : prevNodes;
+        });
+    }, [setNodes, teamConflictAnalysis]);
+
+    useEffect(() => {
+        if (isGraphHydrating) return;
+        const previousStates = previousConflictStateRef.current || {};
+        const nextStates = {};
+        nodes.forEach((node) => {
+            if (node?.type !== "thinkingNode") return;
+            const nextConflict = teamConflictAnalysis?.conflictByNodeId?.[node.id] || null;
+            const nextState = nextConflict?.state || "none";
+            nextStates[node.id] = nextState;
+        });
+        if (Object.keys(previousStates).length === 0) {
+            previousConflictStateRef.current = nextStates;
+            return;
+        }
+        nodes.forEach((node) => {
+            if (node?.type !== "thinkingNode") return;
+            const nextConflict = teamConflictAnalysis?.conflictByNodeId?.[node.id] || null;
+            const nextState = nextConflict?.state || "none";
+            const previousState = previousStates[node.id] || "none";
+            if (nextState !== "none" && previousState !== nextState) {
+                void recordProjectActivity("node_conflict_detected", {
+                    nodeId: node.id,
+                    nodeTitle: node?.data?.title || "",
+                    nodeType: node?.data?.category || "",
+                    before: {
+                        conflictState: previousState,
+                    },
+                    after: {
+                        conflictState: nextState,
+                        conflictSummary: nextConflict?.summary || "",
+                    },
+                    relatedNodeIds: nextConflict?.linkedNodeIds || [],
+                    stage: normalizedStage,
+                    metadata: {
+                        conflictLabel: nextConflict?.label || "",
+                    },
+                });
+            }
+        });
+        previousConflictStateRef.current = nextStates;
+    }, [isGraphHydrating, nodes, normalizedStage, recordProjectActivity, teamConflictAnalysis]);
 
     useEffect(() => {
         if (selectedNodeId && !visibleCanvasNodeIds.has(selectedNodeId)) {
@@ -550,6 +674,7 @@ export default function ThinkingMachine({
     const handleClearSelectedNode = useCallback(() => {
         setSelectedNodeId(null);
         setActiveSuggestion(null);
+        setOpenConflictNodeId(null);
     }, [setActiveSuggestion]);
 
     const reasoningModeProfile = useMemo(() => getReasoningModeProfile(normalizedStage), [normalizedStage]);
@@ -670,6 +795,92 @@ export default function ThinkingMachine({
         setIsTeamContextPanelOpen((prev) => !prev);
     }, []);
 
+    const handleToggleConflictPopover = useCallback((nodeId, nextOpen) => {
+        if (nextOpen) {
+            setSelectedNodeId(nodeId || null);
+        }
+        setOpenConflictNodeId(nextOpen ? nodeId : null);
+    }, []);
+
+    const handleExplainConflict = useCallback(async (nodeId) => {
+        const conflictMeta = teamConflictAnalysis?.conflictByNodeId?.[nodeId];
+        const selectedConflictNode = nodes.find((node) => node?.id === nodeId && node?.type === "thinkingNode");
+        if (!conflictMeta || !selectedConflictNode) return;
+        const conflictingNodes = nodes
+            .filter((node) => conflictMeta.linkedNodeIds.includes(node.id) && node?.type === "thinkingNode")
+            .map((node) => ({
+                id: node.id,
+                title: node?.data?.title || "",
+                content: node?.data?.content || "",
+                category: node?.data?.category,
+                phase: node?.data?.phase,
+            }));
+        const surroundingNodeIds = new Set([
+            ...getRelatedNodeIds(nodeId, edges),
+            ...conflictMeta.linkedNodeIds.flatMap((relatedId) => getRelatedNodeIds(relatedId, edges)),
+        ]);
+        conflictMeta.linkedNodeIds.forEach((relatedId) => surroundingNodeIds.delete(relatedId));
+        surroundingNodeIds.delete(nodeId);
+        const surroundingNodes = nodes
+            .filter((node) => surroundingNodeIds.has(node.id) && node?.type === "thinkingNode")
+            .slice(0, 6)
+            .map((node) => ({
+                id: node.id,
+                title: node?.data?.title || "",
+                content: node?.data?.content || "",
+                category: node?.data?.category,
+                phase: node?.data?.phase,
+            }));
+        const relevantActivity = (Array.isArray(activityLog) ? activityLog : [])
+            .filter((item) => item?.nodeId === nodeId || (item?.relatedNodeIds || []).some((relatedId) => conflictMeta.linkedNodeIds.includes(relatedId)))
+            .slice(0, 6);
+
+        setConflictExplainLoadingByNodeId((prev) => ({
+            ...prev,
+            [nodeId]: true,
+        }));
+        try {
+            const result = await explainConflict({
+                projectTitle,
+                stage: normalizedStage,
+                selectedNode: {
+                    id: selectedConflictNode.id,
+                    title: selectedConflictNode?.data?.title || "",
+                    content: selectedConflictNode?.data?.content || "",
+                    category: selectedConflictNode?.data?.category,
+                    phase: selectedConflictNode?.data?.phase,
+                },
+                conflictingNodes,
+                surroundingNodes,
+                activityEvents: relevantActivity,
+            });
+            setConflictExplainResultByNodeId((prev) => ({
+                ...prev,
+                [nodeId]: result,
+            }));
+        } catch (error) {
+            const message =
+                error?.response?.data?.error ||
+                error?.message ||
+                "Failed to explain the conflict.";
+            setConflictExplainResultByNodeId((prev) => ({
+                ...prev,
+                [nodeId]: {
+                    summary: message,
+                    whyDifferent: "The AI explanation could not be generated right now.",
+                    assumptionGap: "",
+                    riskIfIgnored: "",
+                    suggestedNextStep: "Try again after the graph or network state stabilizes.",
+                },
+            }));
+        } finally {
+            setConflictExplainLoadingByNodeId((prev) => ({
+                ...prev,
+                [nodeId]: false,
+            }));
+        }
+    }, [activityLog, edges, nodes, normalizedStage, projectTitle, teamConflictAnalysis]);
+
     return (
         <div className="w-full h-screen relative flex flex-col overflow-hidden bg-slate-50">
             <div
@@ -769,6 +980,12 @@ export default function ThinkingMachine({
                             }}
                             draftSubmittingIds={draftSubmittingIds}
                             canvasStage={stage}
+                            conflictByNodeId={teamConflictAnalysis?.conflictByNodeId || {}}
+                            openConflictNodeId={openConflictNodeId}
+                            conflictExplainResultByNodeId={conflictExplainResultByNodeId}
+                            conflictExplainLoadingByNodeId={conflictExplainLoadingByNodeId}
+                            onToggleConflictPopover={handleToggleConflictPopover}
+                            onExplainConflict={handleExplainConflict}
                         />
 
                     </>

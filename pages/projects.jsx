@@ -1,7 +1,11 @@
 import { startTransition, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/router";
-import { createProject as createProjectRequest, fetchProjects } from "@/lib/thinkingMachine/apiClient";
+import {
+  createProject as createProjectRequest,
+  fetchProjects,
+  joinProject,
+} from "@/lib/thinkingMachine/apiClient";
 import { readCurrentUser } from "@/lib/thinkingMachine/clientUser";
 
 const LOGIN_STORAGE_KEY = "isLoggedIn";
@@ -29,7 +33,12 @@ function createProjectDraft() {
 export default function ProjectsPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
-  const [projects, setProjects] = useState([]);
+  const [myProjects, setMyProjects] = useState([]);
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearchLoading, setIsSearchLoading] = useState(false);
+  const [joiningProjectId, setJoiningProjectId] = useState("");
+  const [currentUser, setCurrentUser] = useState(null);
 
   useEffect(() => {
     const isLoggedIn = typeof window !== "undefined" && window.localStorage.getItem(LOGIN_STORAGE_KEY) === "true";
@@ -41,14 +50,19 @@ export default function ProjectsPage() {
 
     const run = async () => {
       try {
-        const nextProjects = await fetchProjects();
+        const nextCurrentUser = readCurrentUser();
+        const nextProjects = await fetchProjects({
+          currentUserId: nextCurrentUser.id,
+          scope: "member",
+        });
         startTransition(() => {
-          setProjects(nextProjects);
+          setCurrentUser(nextCurrentUser);
+          setMyProjects(nextProjects);
           setIsLoading(false);
         });
       } catch {
         startTransition(() => {
-          setProjects([]);
+          setMyProjects([]);
           setIsLoading(false);
         });
       }
@@ -56,30 +70,89 @@ export default function ProjectsPage() {
     void run();
   }, [router]);
 
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    const trimmedQuery = searchQuery.trim();
+    if (!trimmedQuery) {
+      setSearchResults([]);
+      setIsSearchLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsSearchLoading(true);
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        const nextResults = await fetchProjects({
+          currentUserId: currentUser.id,
+          scope: "discover",
+          query: trimmedQuery,
+        });
+        if (!cancelled) {
+          setSearchResults(nextResults);
+        }
+      } catch {
+        if (!cancelled) setSearchResults([]);
+      } finally {
+        if (!cancelled) setIsSearchLoading(false);
+      }
+    }, 220);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [currentUser, searchQuery]);
+
   const sortedProjects = useMemo(() => {
-    return [...projects].sort((a, b) => {
+    return [...myProjects].sort((a, b) => {
       const aTime = new Date(a?.updatedAt || 0).getTime();
       const bTime = new Date(b?.updatedAt || 0).getTime();
       return bTime - aTime;
     });
-  }, [projects]);
+  }, [myProjects]);
 
   const handleCreateProject = async () => {
     const draftProject = createProjectDraft();
-    const currentUser = readCurrentUser();
+    const nextCurrentUser = currentUser || readCurrentUser();
     const nextProject = await createProjectRequest({
       title: draftProject.title,
       actor: {
-        ...currentUser,
+        ...nextCurrentUser,
         role: "owner",
       },
     });
-    setProjects((prev) => [nextProject, ...prev]);
+    setCurrentUser(nextCurrentUser);
+    setMyProjects((prev) => [nextProject, ...prev]);
     void router.push(`/projects/${nextProject.id}`);
   };
 
   const handleOpenProject = (projectId) => {
     void router.push(`/projects/${projectId}`);
+  };
+
+  const handleJoinProject = async (project) => {
+    if (!project?.id || !currentUser) return;
+    setJoiningProjectId(project.id);
+    try {
+      await joinProject(project.id, {
+        ...currentUser,
+        role: currentUser.role || "editor",
+      });
+      const refreshedMyProjects = await fetchProjects({
+        currentUserId: currentUser.id,
+        scope: "member",
+      });
+      startTransition(() => {
+        setMyProjects(refreshedMyProjects);
+        setSearchResults((prev) =>
+          prev.map((item) => (item.id === project.id ? { ...item, isMember: true } : item))
+        );
+      });
+      void router.push(`/projects/${project.id}`);
+    } finally {
+      setJoiningProjectId("");
+    }
   };
 
   if (isLoading) {
@@ -130,7 +203,7 @@ export default function ProjectsPage() {
             </div>
             <h1 className="mt-3 text-4xl font-semibold tracking-[-0.03em] text-[#3C3C3C]">Projects</h1>
             <p className="mt-2 text-sm text-slate-600">
-              Open an existing project or create a new one to continue.
+              Search by project name, join a project, or open one you already participate in.
             </p>
           </div>
 
@@ -143,15 +216,81 @@ export default function ProjectsPage() {
           </button>
         </div>
 
+        <div className="mb-8 rounded-[28px] border border-black/10 bg-white p-5 shadow-[0_24px_80px_rgba(15,23,42,0.08)]">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#558A72]">
+            Discover
+          </div>
+          <div className="mt-3 flex flex-col gap-3 sm:flex-row">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search by project name"
+              className="w-full rounded-2xl border border-black/10 bg-[#F8FBFB] px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-[#8DB9A3]"
+            />
+          </div>
+          {searchQuery.trim() ? (
+            <div className="mt-4">
+              {isSearchLoading ? (
+                <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                  Searching projects...
+                </div>
+              ) : searchResults.length ? (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {searchResults.map((project) => (
+                    <div
+                      key={`discover-${project.id}`}
+                      className="rounded-2xl border border-black/10 bg-[#FCFEFE] p-4 shadow-sm"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="line-clamp-2 text-lg font-semibold tracking-[-0.03em] text-[#3C3C3C]">
+                            {project.title || "Untitled Project"}
+                          </div>
+                          <div className="mt-2 text-xs text-slate-500">
+                            Updated {formatDate(project.updatedAt)} · {project.memberCount || 0} members
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            project.isMember ? handleOpenProject(project.id) : void handleJoinProject(project)
+                          }
+                          disabled={joiningProjectId === project.id}
+                          className="shrink-0 rounded-full bg-[#7BA592] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#6b907f] disabled:opacity-60"
+                        >
+                          {joiningProjectId === project.id
+                            ? "Joining..."
+                            : project.isMember
+                              ? "Open"
+                              : "Join"}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                  No projects matched that name.
+                </div>
+              )}
+            </div>
+          ) : null}
+        </div>
+
         {sortedProjects.length === 0 ? (
           <div className="rounded-[28px] border border-black/10 bg-white px-8 py-14 text-center shadow-[0_24px_80px_rgba(15,23,42,0.08)]">
-            <div className="text-lg font-semibold text-slate-900">No projects yet</div>
+            <div className="text-lg font-semibold text-slate-900">No joined projects yet</div>
             <p className="mt-2 text-sm text-slate-600">
-              Start your first project and we&apos;ll take you straight into it.
+              Create one or search by name to join an existing project.
             </p>
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <>
+            <div className="mb-4 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#558A72]">
+              My Projects
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {sortedProjects.map((project) => (
               <button
                 key={project.id}
@@ -166,11 +305,12 @@ export default function ProjectsPage() {
                   {project.title || "Untitled Project"}
                 </div>
                 <div className="mt-6 text-xs text-slate-600">
-                  Updated {formatDate(project.updatedAt)}
+                  Updated {formatDate(project.updatedAt)} · {project.memberCount || 0} members
                 </div>
               </button>
             ))}
-          </div>
+            </div>
+          </>
         )}
       </div>
     </main>

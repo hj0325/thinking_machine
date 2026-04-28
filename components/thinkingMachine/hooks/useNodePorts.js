@@ -2,7 +2,19 @@
 
 import { useMemo } from "react";
 
-export function useNodePorts({ nodes, edges, highlightedNodeIds, draftHandlers, draftSubmittingIds }) {
+export function useNodePorts({
+  nodes,
+  edges,
+  highlightedNodeIds,
+  draftHandlers,
+  draftSubmittingIds,
+  conflictByNodeId,
+  openConflictNodeId,
+  conflictExplainResultByNodeId,
+  conflictExplainLoadingByNodeId,
+  onToggleConflictPopover,
+  onExplainConflict,
+}) {
   const portVisibilityByNode = useMemo(() => {
     const map = new Map();
     edges.forEach((edge) => {
@@ -48,12 +60,35 @@ export function useNodePorts({ nodes, edges, highlightedNodeIds, draftHandlers, 
               onToggle: draftHandlers?.onToggleIdeaGroup,
             }
           : {}),
+        ...(n.type === "thinkingNode"
+          ? {
+              nodeId: n.id,
+              conflictLinkedNodeTitles: conflictByNodeId?.[n.id]?.linkedNodeTitles || [],
+              conflictExplanation: conflictExplainResultByNodeId?.[n.id] || null,
+              isConflictPopoverOpen: openConflictNodeId === n.id,
+              isConflictExplainLoading: Boolean(conflictExplainLoadingByNodeId?.[n.id]),
+              onToggleConflictPopover,
+              onExplainConflict,
+            }
+          : {}),
       },
       className: [n.className || "", hasHighlightSet && highlightedNodeIds.has(n.id) ? "node-highlighted" : ""]
         .filter(Boolean)
         .join(" "),
     }));
-  }, [draftHandlers, draftSubmittingIds, highlightedNodeIds, nodes, portVisibilityByNode]);
+  }, [
+    conflictByNodeId,
+    conflictExplainLoadingByNodeId,
+    conflictExplainResultByNodeId,
+    draftHandlers,
+    draftSubmittingIds,
+    highlightedNodeIds,
+    nodes,
+    onExplainConflict,
+    onToggleConflictPopover,
+    openConflictNodeId,
+    portVisibilityByNode,
+  ]);
 
   return { displayNodes };
 }

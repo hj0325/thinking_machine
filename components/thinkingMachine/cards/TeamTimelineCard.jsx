@@ -14,8 +14,10 @@ function formatTypeLabel(type) {
   const normalized = String(type || "").toLowerCase();
   if (normalized === "node_created") return "Created";
   if (normalized === "node_shared") return "Shared";
+  if (normalized === "node_promoted_to_team") return "To team";
   if (normalized === "node_visibility_changed") return "Visibility";
   if (normalized === "conflict_created") return "Conflict";
+  if (normalized === "node_conflict_detected") return "Conflict signal";
   if (normalized === "stage_changed") return "Stage";
   return normalized.replace(/_/g, " ");
 }

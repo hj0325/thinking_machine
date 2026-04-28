@@ -2,6 +2,7 @@
 
 import { Handle, Position } from "reactflow";
 import { getTypeMeta, normalizeNodeCategory, getSourceTypeMeta } from "@/lib/thinkingMachine/nodeMeta";
+import ConflictPopover from "@/components/thinkingMachine/conflicts/ConflictPopover";
 
 const HANDLE_STYLE = {
   top: 38,
@@ -83,6 +84,17 @@ export default function ThinkingNode({ data = {} }) {
 
   return (
     <div className="relative h-full w-full">
+      <ConflictPopover
+        nodeId={data.nodeId}
+        state={data.conflictState}
+        summary={data.conflictSummary}
+        linkedNodeTitles={data.conflictLinkedNodeTitles}
+        explanation={data.conflictExplanation}
+        isOpen={Boolean(data.isConflictPopoverOpen)}
+        isLoading={Boolean(data.isConflictExplainLoading)}
+        onToggle={data.onToggleConflictPopover}
+        onExplain={data.onExplainConflict}
+      />
       <div className="flex h-full w-full flex-col">
         <div className="relative w-full rounded-[18px] border border-white/60 bg-white/30 px-3 pt-4 pb-4 shadow-[0_14px_32px_rgba(15,23,42,0.14)] backdrop-blur-[18px]">
           <div className="mb-3 text-center text-[11px] font-semibold" style={{ color: "#194312" }}>

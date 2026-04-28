@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  getConflictStateMeta,
   getConfidenceMeta,
   getPreviousVisibility,
   getRoleMeta,
@@ -61,6 +62,7 @@ export default function NodeDetailCard({
   const sourceMeta = getSourceTypeMeta(data.sourceType);
   const visibilityMeta = getVisibilityMeta(data.visibility);
   const confidenceMeta = getConfidenceMeta(data.confidence);
+  const conflictMeta = getConflictStateMeta(data.conflictState);
   const roleMeta = getRoleMeta(currentUserRole);
   const linked = Array.isArray(linkedNodes) ? linkedNodes : [];
   const canEdit = currentUserRole === "owner" || currentUserRole === "editor";
@@ -107,7 +109,15 @@ export default function NodeDetailCard({
         <MetaPill className={sourceMeta.className}>{sourceMeta.label}</MetaPill>
         <MetaPill className={visibilityMeta.className}>{visibilityMeta.label}</MetaPill>
         <MetaPill className={confidenceMeta.className}>{confidenceMeta.label}</MetaPill>
+        {data.conflictState !== "none" ? (
+          <MetaPill className={conflictMeta.className}>{conflictMeta.label}</MetaPill>
+        ) : null}
       </div>
+      {data.conflictState !== "none" && data.conflictSummary ? (
+        <div className="mt-2 rounded-xl border border-amber-200/80 bg-amber-50/80 px-2.5 py-2 text-[11px] leading-relaxed text-amber-800">
+          {data.conflictSummary}
+        </div>
+      ) : null}
       {quickActions.length ? (
         <div className="mt-3 rounded-xl border border-slate-200/80 bg-slate-50/85 px-2.5 py-2">
           <div className="text-[11px] font-semibold text-slate-500">
@@ -146,7 +156,7 @@ export default function NodeDetailCard({
           disabled={!canEdit || data.visibility === "shared" || data.visibility === "reviewed" || data.visibility === "agreed"}
           className="inline-flex items-center justify-center rounded-xl bg-sky-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          Share
+          To team
         </button>
       </div>
       <div className="mt-3">

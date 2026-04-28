@@ -1,4 +1,8 @@
-import { normalizeVisibility } from "@/lib/thinkingMachine/nodeMeta";
+import {
+  normalizeConflictState,
+  normalizeLayerOrigin,
+  normalizeVisibility,
+} from "@/lib/thinkingMachine/nodeMeta";
 
 export function getNodeSnapshot(node, edges = []) {
   if (!node) return null;
@@ -14,6 +18,9 @@ export function getNodeSnapshot(node, edges = []) {
     category: node?.data?.category || "",
     phase: node?.data?.phase || "",
     visibility: normalizeVisibility(node?.data?.visibility),
+    layerOrigin: normalizeLayerOrigin(node?.data?.layerOrigin, node?.data?.visibility),
+    conflictState: normalizeConflictState(node?.data?.conflictState),
+    conflictSummary: typeof node?.data?.conflictSummary === "string" ? node.data.conflictSummary : "",
     linkedNodeIds,
   };
 }
